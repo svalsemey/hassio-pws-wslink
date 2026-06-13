@@ -262,16 +262,16 @@
                     "wnw": "WNW",
                     "nw": "NW",
                     "nnw": "NNW"
-                },
-                "wbgt_temp": {
-                    "name": "WBGT temperature"
                 }
+            },
+            "wbgt_temp": {
+                "name": "Wet-bulb globe temperature"
             }
         }
     },
     "notify": {
         "added": {
-            "title": "New sensors for Weather Station found.",
+            "title": "New sensors found for Weather Station",
             "message": "{added_sensors}\n"
         }
     }

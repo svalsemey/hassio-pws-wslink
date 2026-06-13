@@ -263,6 +263,9 @@
                     "nw": "NW",
                     "nnw": "NNW"
                 }
+            },
+            "wbgt_temp": {
+                "name": "Wet-bulb globe temperature"
             }
         }
     },

@@ -263,6 +263,9 @@
                     "nw": "NO",
                     "nnw": "NNO"
                 }
+            },
+            "wbgt_temp": {
+                "name": "Température au thermomètre-globe mouillé"
             }
         }
     },
