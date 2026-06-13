@@ -8,10 +8,10 @@
   "dependencies": [
     "http"
   ],
-  "documentation": "https://github.com/svalsemey/hassio-weather-station",
+  "documentation": "https://github.com/svalsemey/hassio-pws-wslink",
   "homekit": {},
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/svalsemey/hassio-weather-station",
+  "issue_tracker": "https://github.com/svalsemey/hassio-pws-wslink",
   "requirements": [],
   "ssdp": [],
   "version": "0.0.1",
