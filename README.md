@@ -4,8 +4,8 @@ Custom integration to receive local push data from weather stations and expose i
 
 This integration supports stations that can send data to a custom server using:
 
-- **PWS/WU-like endpoint** (`/weatherstation/updateweatherstation.php`)
-- **WSLink endpoint** (`/data/upload.php`)
+- Personal Weather Station / WeatherUnderground API (PWS/WU)
+- WS-Link API
 
 It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and compatible models using similar payload formats.
 
