@@ -10,20 +10,14 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ... import WeatherDataUpdateCoordinator
-from .const import (
-    BATTERY_LIST,
-    DOMAIN,
-    SENSORS_TO_LOAD,
-    WSLINK,
-)
+from . import WeatherDataUpdateCoordinator
+from .const import BATTERY_LIST, DOMAIN, SENSORS_TO_LOAD, WSLINK
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,7 +44,7 @@ def _battery_is_low(value: Any) -> bool | None:
 
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
     if parsed == 0:
@@ -120,7 +114,6 @@ class WeatherBatteryBinarySensor(
         # after integration startup/reload.
         self._has_seen_payload = False
 
-
     async def async_added_to_hass(self) -> None:
         """Handle entity added to hass."""
         await super().async_added_to_hass()
@@ -129,7 +122,9 @@ class WeatherBatteryBinarySensor(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        data = self.coordinator.data if isinstance(self.coordinator.data, dict) else None
+        data = (
+            self.coordinator.data if isinstance(self.coordinator.data, dict) else None
+        )
 
         # Mark bootstrap as completed once we receive first payload
         if data is not None:
@@ -138,7 +133,6 @@ class WeatherBatteryBinarySensor(
         super()._handle_coordinator_update()
         self.async_write_ha_state()
 
-
     @property
     def is_on(self) -> bool | None:
         """Return true when battery is low."""
@@ -146,7 +140,6 @@ class WeatherBatteryBinarySensor(
             return None
         raw_value = self.coordinator.data.get(self.entity_description.key)
         return self.entity_description.value_fn(raw_value)
-
 
     @property
     def available(self) -> bool:

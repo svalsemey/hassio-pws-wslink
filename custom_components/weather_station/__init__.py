@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import InvalidStateError, PlatformNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .custom_components.weather_station.const import (
+from .const import (
     API_ID,
     API_KEY,
     DEFAULT_URL,
@@ -184,7 +184,7 @@ def register_path(
 
             hass_data["routes"] = routes
 
-        except RuntimeError as Ex:  # pylint: disable=(broad-except)
+        except RuntimeError as Ex:
             if (
                 "Added route will never be executed, method GET is already registered"
                 in Ex.args

@@ -1,7 +1,7 @@
 """Sensors definition for Weather Station."""
 
-import logging
 from datetime import datetime
+import logging
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -13,7 +13,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from ... import WeatherDataUpdateCoordinator
+from . import WeatherDataUpdateCoordinator
 from .const import (
     BATTERY_LIST,
     CHILL_INDEX,
@@ -58,7 +58,7 @@ async def async_setup_entry(
     sensors: list = []
     _wslink = config_entry.options.get(WSLINK)
 
-    SENSOR_TYPES = SENSOR_TYPES_WSLINK if _wslink else SENSOR_TYPES_WEATHER_API
+    sensor_types = SENSOR_TYPES_WSLINK if _wslink else SENSOR_TYPES_WEATHER_API
 
     # Check if we have some sensors to load.
     if sensors_to_load := config_entry.options.get(SENSORS_TO_LOAD, []):
@@ -71,7 +71,7 @@ async def async_setup_entry(
             sensors_to_load.append(CHILL_INDEX)
         sensors = [
             WeatherSensor(hass, description, coordinator)
-            for description in SENSOR_TYPES
+            for description in sensor_types
             if description.key in sensors_to_load
             and not (_wslink and description.key in BATTERY_LIST)
         ]
@@ -85,7 +85,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-
 
     def __init__(
         self,
@@ -111,7 +110,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._last_lightning_minutes: int | None = None
         self._last_lightning_count_last_hour: int | None = None
         self._last_lightning_distance: int | None = None
-
 
     async def async_added_to_hass(self) -> None:
         """Handle listeners and restore state."""
@@ -141,7 +139,9 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        data = self.coordinator.data if isinstance(self.coordinator.data, dict) else None
+        data = (
+            self.coordinator.data if isinstance(self.coordinator.data, dict) else None
+        )
         self._data = data.get(self.entity_description.key) if data is not None else None
 
         # Mark bootstrap as completed once we receive first payload
@@ -151,7 +151,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         super()._handle_coordinator_update()
         self.async_write_ha_state()
 
-
     @staticmethod
     def _to_int(value) -> int | None:
         """Convert value to int safely."""
@@ -159,15 +158,13 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
             return None
         try:
             return int(float(value))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
-
 
     @staticmethod
     def _has_value(value) -> bool:
         """Return True if payload value is usable."""
         return value not in (None, "")
-
 
     @property
     def available(self) -> bool:
@@ -179,7 +176,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         if not self._has_seen_payload:
             return True
         return self._source_present_in_payload()
-
 
     def _source_present_in_payload(self) -> bool:
         """Return True if current payload provides data needed by this entity."""
@@ -194,13 +190,16 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
             return data.get(WIND_DIR) not in (None, "")
 
         if key == HEAT_INDEX and not _wslink:
-            return data.get(OUTSIDE_TEMP) not in (None, "") and data.get(OUTSIDE_HUMIDITY) not in (None, "")
+            return data.get(OUTSIDE_TEMP) not in (None, "") and data.get(
+                OUTSIDE_HUMIDITY
+            ) not in (None, "")
 
         if key == CHILL_INDEX and not _wslink:
-            return data.get(OUTSIDE_TEMP) not in (None, "") and data.get(WIND_SPEED) not in (None, "")
+            return data.get(OUTSIDE_TEMP) not in (None, "") and data.get(
+                WIND_SPEED
+            ) not in (None, "")
 
         return data.get(key) not in (None, "")
-
 
     def _stable_lightning_last_strike(self) -> datetime | None:
         """Return stable lightning last-strike timestamp.
@@ -306,7 +305,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         return self._last_lightning_distance
 
-
     @property
     def native_value(self):  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return value of entity."""
@@ -331,13 +329,17 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         if self.entity_description.key == CHILL_INDEX and not _wslink:
             return self.entity_description.value_fn(chill_index(data))  # pyright: ignore[ reportAttributeAccessIssue]
 
-        return None if self._data == "" else self.entity_description.value_fn(self._data)  # pyright: ignore[ reportAttributeAccessIssue]
-
+        return (
+            None if self._data == "" else self.entity_description.value_fn(self._data)
+        )  # pyright: ignore[ reportAttributeAccessIssue]
 
     @property
     def extra_state_attributes(self) -> dict[str, int | str] | None:
         """Persist helper attributes for lightning restoration."""
-        if self.entity_description.key not in (LIGHTNING_STRIKE_TIME, LIGHTNING_DISTANCE):
+        if self.entity_description.key not in (
+            LIGHTNING_STRIKE_TIME,
+            LIGHTNING_DISTANCE,
+        ):
             return None
 
         attrs: dict[str, int | float | str] = {}
@@ -349,12 +351,10 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         return attrs or None
 
-
     @property
     def suggested_entity_id(self) -> str:
         """Return name."""
         return generate_entity_id("sensor.{}", self.entity_description.key)
-
 
     @property
     def icon(self) -> str | None:  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -368,7 +368,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
             return battery_level_to_icon(UnitOfBat.UNKNOWN)
 
         return self.entity_description.icon
-
 
     @property
     def device_info(self) -> DeviceInfo:  # pyright: ignore[reportIncompatibleVariableOverride]

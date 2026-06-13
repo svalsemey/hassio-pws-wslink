@@ -49,7 +49,9 @@ async def translations(
 
     language = hass.config.language
 
-    _translations = await async_get_translations(hass, language, category, [translation_domain])
+    _translations = await async_get_translations(
+        hass, language, category, [translation_domain]
+    )
     if localize_key in _translations:
         return _translations[localize_key]
     return ""
@@ -69,11 +71,15 @@ async def translated_notification(
 
     localize_key = f"component.{translation_domain}.{category}.{translation_key}.{key}"
 
-    localize_title = f"component.{translation_domain}.{category}.{translation_key}.title"
+    localize_title = (
+        f"component.{translation_domain}.{category}.{translation_key}.title"
+    )
 
     language = hass.config.language
 
-    _translations = await async_get_translations(hass, language, category, [translation_domain])
+    _translations = await async_get_translations(
+        hass, language, category, [translation_domain]
+    )
     if localize_key in _translations:
         if not translation_placeholders:
             persistent_notification.async_create(
@@ -84,10 +90,14 @@ async def translated_notification(
             )
         else:
             message = _translations[localize_key].format(**translation_placeholders)
-            persistent_notification.async_create(hass, message, _translations[localize_title], notification_id)
+            persistent_notification.async_create(
+                hass, message, _translations[localize_title], notification_id
+            )
 
 
-async def update_options(hass: HomeAssistant, entry: ConfigEntry, update_key, update_value) -> bool:
+async def update_options(
+    hass: HomeAssistant, entry: ConfigEntry, update_key, update_value
+) -> bool:
     """Update config.options entry."""
     conf = {**entry.options}
     conf[update_key] = update_value
@@ -106,7 +116,7 @@ def anonymize(data):
     return anonym
 
 
-def minutes_since_to_timestamp(value: str | int | float | None) -> datetime | None:
+def minutes_since_to_timestamp(value: str | float | None) -> datetime | None:
     """Convert minutes since last event to UTC timestamp rounded to minute.
 
     Input is expected to be the number of minutes since the last lightning strike.
@@ -118,7 +128,7 @@ def minutes_since_to_timestamp(value: str | int | float | None) -> datetime | No
 
     try:
         minutes = int(float(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
     if minutes < 0:
@@ -159,7 +169,9 @@ def loaded_sensors(config_entry: ConfigEntry) -> list | None:
     return config_entry.options.get(SENSORS_TO_LOAD) or []
 
 
-def check_disabled(hass: HomeAssistant, items, config_entry: ConfigEntry) -> list | None:
+def check_disabled(
+    hass: HomeAssistant, items, config_entry: ConfigEntry
+) -> list | None:
     """Check if we have data for unloaded sensors.
 
     If so, then add sensor to load queue.
@@ -168,7 +180,7 @@ def check_disabled(hass: HomeAssistant, items, config_entry: ConfigEntry) -> lis
     """
 
     log: bool = config_entry.options.get(DEV_DBG, False)
-    entityFound: bool = False
+    entity_found: bool = False
     _loaded_sensors = loaded_sensors(config_entry)
     missing_sensors: list = []
 
@@ -178,11 +190,11 @@ def check_disabled(hass: HomeAssistant, items, config_entry: ConfigEntry) -> lis
 
         if item not in _loaded_sensors:
             missing_sensors.append(item)
-            entityFound = True
+            entity_found = True
             if log:
                 _LOGGER.info("Add sensor (%s) to loading queue", item)
 
-    return missing_sensors if entityFound else None
+    return missing_sensors if entity_found else None
 
 
 def wind_dir_to_text(deg: float) -> UnitOfDir | None:
@@ -304,7 +316,11 @@ def chill_index(data: Any, convert: bool = False) -> float | None:
 
     return (
         round(
-            ((35.7 + (0.6215 * temp)) - (35.75 * (wind**0.16)) + (0.4275 * (temp * (wind**0.16)))),
+            (
+                (35.7 + (0.6215 * temp))
+                - (35.75 * (wind**0.16))
+                + (0.4275 * (temp * (wind**0.16)))
+            ),
             2,
         )
         if temp < 50 and wind > 3
@@ -346,7 +362,9 @@ def long_term_units_in_statistics_meta():
             """
         )
         rows = db.fetchall()
-        sensor_units = {statistic_id: f"{statistic_id} ({unit})" for statistic_id, unit in rows}
+        sensor_units = {
+            statistic_id: f"{statistic_id} ({unit})" for statistic_id, unit in rows
+        }
 
     except sqlite3.Error as e:
         _LOGGER.error("Error during data migration: %s", e)

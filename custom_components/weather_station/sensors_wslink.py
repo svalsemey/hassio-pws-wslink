@@ -55,8 +55,8 @@ from .const import (
     LIGHTNING_DISTANCE,
     LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
     LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
-    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
     LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
     LIGHTNING_STRIKE_COUNT_LAST_HOUR,
     LIGHTNING_STRIKE_TIME,
     MONTHLY_RAIN,
@@ -81,7 +81,12 @@ from .const import (
     VOCLevel,
 )
 from .sensors_common import WeatherSensorEntityDescription
-from .utils import battery_5step_to_pct, minutes_since_to_timestamp, voc_level_to_text, wind_dir_to_text
+from .utils import (
+    battery_5step_to_pct,
+    minutes_since_to_timestamp,
+    voc_level_to_text,
+    wind_dir_to_text,
+)
 
 SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(
@@ -299,7 +304,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         translation_key=CH2_HUMIDITY,
         value_fn=lambda data: cast("int", data),
     ),
-        WeatherSensorEntityDescription(
+    WeatherSensorEntityDescription(
         key=CH3_TEMP,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -446,42 +451,42 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         translation_key=CH2_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=CH3_BATTERY,
         translation_key=CH3_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=CH4_BATTERY,
         translation_key=CH4_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=CH5_BATTERY,
         translation_key=CH5_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=CH6_BATTERY,
         translation_key=CH6_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=CH7_BATTERY,
         translation_key=CH7_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=INDOOR_BATTERY,
@@ -552,7 +557,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         translation_key=T5_BATTERY,
         icon="mdi:battery-unknown",
         device_class=SensorDeviceClass.ENUM,
-        value_fn=lambda data: (data),
+        value_fn=lambda data: data,
     ),
     WeatherSensorEntityDescription(
         key=HCHO,
