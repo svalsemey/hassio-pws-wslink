@@ -1,6 +1,6 @@
 # Weather Station for Home Assistant
 
-Custom integration to receive local push data from weather stations and expose it in Home Assistant as entities.
+Custom integration to for local weather stations.
 
 This integration supports stations that can send data to a custom server using:
 
