@@ -65,34 +65,50 @@ async def translated_notification(
     notification_id: str | None = None,
     *,
     key: str = "message",
-    category: str = "notify",
+    category: str = "exceptions",
 ):
-    """Translate notification."""
+    """Create a translated persistent notification (Hassfest-safe).
 
-    localize_key = f"component.{translation_domain}.{category}.{translation_key}.{key}"
-
-    localize_title = (
-        f"component.{translation_domain}.{category}.{translation_key}.title"
-    )
+    This helper does not use the non-supported "notify" section in strings.json.
+    It expects translation keys in:
+      component.<domain>.<category>.<translation_key>.message
+      component.<domain>.<category>.<translation_key>_title.message
+    """
 
     language = hass.config.language
-
     _translations = await async_get_translations(
         hass, language, category, [translation_domain]
     )
-    if localize_key in _translations:
-        if not translation_placeholders:
-            persistent_notification.async_create(
-                hass,
-                _translations[localize_key],
-                _translations[localize_title],
-                notification_id,
-            )
-        else:
-            message = _translations[localize_key].format(**translation_placeholders)
-            persistent_notification.async_create(
-                hass, message, _translations[localize_title], notification_id
-            )
+
+    # Message key (required)
+    message_key = f"component.{translation_domain}.{category}.{translation_key}.{key}"
+
+    # Title key (optional convention: <translation_key>_title.message)
+    title_key = (
+        f"component.{translation_domain}.{category}.{translation_key}_title.message"
+    )
+
+    message_template = _translations.get(message_key)
+    if not message_template:
+        return
+
+    title = _translations.get(title_key, translation_domain)
+
+    if translation_placeholders:
+        try:
+            message = message_template.format(**translation_placeholders)
+        except KeyError:
+            # Fallback if placeholders are incomplete
+            message = message_template
+    else:
+        message = message_template
+
+    persistent_notification.async_create(
+        hass,
+        message,
+        title,
+        notification_id,
+    )
 
 
 async def update_options(

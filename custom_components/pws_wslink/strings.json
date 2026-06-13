@@ -266,10 +266,12 @@
             }
         }
     },
-    "notify": {
-        "added": {
-            "title": "New sensors found for Weather Station",
-            "message": "{added_sensors}\n"
+    "exceptions": {
+        "new_sensors_title": {
+            "message": "New sensors found for Weather Station"
+        },
+        "new_sensors_message": {
+            "message": "{added_sensors}"
         }
     }
 }

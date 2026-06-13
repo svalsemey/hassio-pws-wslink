@@ -266,10 +266,12 @@
             }
         }
     },
-    "notify": {
-        "added": {
-            "title": "Nouveaux capteurs détectés pour la station météo.",
-            "message": "{added_sensors}\n"
+    "exceptions": {
+        "new_sensors_title": {
+            "message": "Nouveaux capteurs détectés pour la station météo"
+        },
+        "new_sensors_message": {
+            "message": "{added_sensors}"
         }
     }
 }
