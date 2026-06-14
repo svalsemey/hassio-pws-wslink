@@ -6,6 +6,7 @@ from typing import Final
 DOMAIN = "pws_wslink"
 DEFAULT_URL = "/weatherstation/updateweatherstation.php"
 WSLINK_URL = "/data/upload.php"
+WSLINK_ADDON_URL: Final = "https://github.com/schizza/wslink-addon"
 DATABASE_PATH = "/config/home-assistant_v2.db"
 
 ICON = "mdi:weather"

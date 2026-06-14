@@ -21,9 +21,9 @@ from .const import (
     INVALID_CREDENTIALS,
     SENSORS_TO_LOAD,
     WSLINK,
+    WSLINK_ADDON_URL,
 )
-
-from .utils import ha_https_enabled
+from .helpers import ha_https_enabled
 
 CONFIRM_WSLINK_NON_HTTPS = "confirm_wslink_non_https"
 
@@ -140,6 +140,9 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                 }
             ),
             errors=errors,
+            description_placeholders={
+                "wslink_addon_url": WSLINK_ADDON_URL,
+            },
         )
 
 
@@ -217,6 +220,9 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders={
+                "wslink_addon_url": WSLINK_ADDON_URL,
+            },
         )
 
     @staticmethod

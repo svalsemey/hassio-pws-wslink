@@ -49,7 +49,7 @@ from .const import (
     UnitOfDir,
 )
 from .sensors_common import WeatherSensorEntityDescription
-from .utils import wind_dir_to_text
+from .helpers import wind_dir_to_text
 
 SENSOR_TYPES_WEATHER_API: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(

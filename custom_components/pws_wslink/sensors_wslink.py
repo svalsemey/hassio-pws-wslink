@@ -81,7 +81,7 @@ from .const import (
     VOCLevel,
 )
 from .sensors_common import WeatherSensorEntityDescription
-from .utils import (
+from .helpers import (
     battery_5step_to_pct,
     minutes_since_to_timestamp,
     voc_level_to_text,

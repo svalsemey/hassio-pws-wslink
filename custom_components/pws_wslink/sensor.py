@@ -34,7 +34,7 @@ from .const import (
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_weather import SENSOR_TYPES_WEATHER_API
 from .sensors_wslink import SENSOR_TYPES_WSLINK
-from .utils import (
+from .helpers import (
     battery_level_to_icon,
     battery_level_to_text,
     chill_index,

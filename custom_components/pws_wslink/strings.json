@@ -25,7 +25,7 @@
             },
             "wslink_warning": {
                 "title": "WSLink over non-HTTPS Home Assistant",
-                "description": "WSLink weather stations often require HTTPS. HTTPS was not detected on your Home Assistant URLs. If your station sends WSLink over HTTPS, install the WSLink proxy add-on (https://github.com/schizza/wslink-addon) or use your own HTTPS reverse proxy.",
+                "description": "WSLink weather stations often require HTTPS. HTTPS was not detected on your Home Assistant URLs. If your station sends WSLink over HTTPS, install the WSLink proxy add-on ({wslink_addon_url}) or use your own HTTPS reverse proxy.",
                 "data": {
                     "confirm_wslink_non_https": "I understand and want to continue"
                 }

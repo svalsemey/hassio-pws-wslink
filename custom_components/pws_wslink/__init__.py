@@ -22,7 +22,7 @@ from .const import (
     WSLINK_URL,
 )
 from .routes import Routes, unregistered
-from .utils import (
+from .helpers import (
     anonymize,
     check_disabled,
     loaded_sensors,
