@@ -1,6 +1,6 @@
 # Weather Station for Home Assistant
 
-Custom integration to for local weather stations.
+Custom integration for local weather stations.
 
 This integration supports stations that can send data to a custom server using:
 
@@ -17,6 +17,8 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 - Local push architecture (`iot_class: local_push`)
 - Credential validation (`API_ID` / `API_KEY`)
 - Supports both **PWS/WU** and **WSLink** receive modes
+- HTTPS awareness in config flow:
+  - If Home Assistant is detected as non-HTTPS, a confirmation warning is shown before continuing
 - Automatic entity discovery:
   - Sensors are created when first data is received
   - New sensor detection triggers a translated persistent notification
@@ -67,19 +69,22 @@ When adding the integration:
 - `API_KEY`: password/key configured on the station
 - `WSLink API`:
   - **Disabled** = PWS/WU endpoint mode
-  - **Enabled** = WSLink endpoint mode (**often requires HTTPS endpoint**)
+  - **Enabled** = WSLink endpoint mode
 - `Developer log` (optional): verbose diagnostics in logs
 
 No YAML is needed.
 
 ---
 
-## ⚠️ Important — WSLink requires HTTPS in many setups
+## ⚠️ Important — HTTPS and weather station uploads
 
-When **WSLink API** is enabled, many recent weather stations send data **only over HTTPS**.
+Many recent weather stations send data over HTTPS only.
 
-If your Home Assistant is not reachable over HTTPS on your local network, WSLink uploads may fail.
-In that case, you must either:
+If Home Assistant is not reachable over HTTPS on your local network, uploads may fail depending on station behavior.
+
+For this reason, the integration shows a **confirmation warning** during configuration whenever Home Assistant is detected as non-HTTPS.
+
+If your station requires HTTPS, you must either:
 
 1. Put Home Assistant behind your own HTTPS reverse proxy, **or**
 2. Install the **WSLink proxy add-on**:
@@ -89,8 +94,8 @@ The WSLink proxy add-on terminates TLS (HTTPS) from the station and forwards req
 
 ### Quick rule
 
-- **WSLink + station sends HTTPS** → HTTPS endpoint is required (proxy/add-on or native HTTPS HA)
-- **PWS/WU over plain HTTP** → proxy is usually not required
+- **Station sends HTTPS** → HTTPS endpoint is required (native HTTPS HA or reverse proxy/add-on)
+- **Station sends plain HTTP** → proxy is usually not required
 
 ---
 
@@ -128,6 +133,7 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
   - Verify station target URL, host/IP, and port
   - Confirm protocol mode (PWS/WU vs WSLink) matches integration option
   - Check credentials (`API_ID` / `API_KEY`)
+  - If your station sends HTTPS, verify your HTTPS endpoint/proxy setup
 - Unauthorized errors:
   - Credentials in payload do not match integration options
 - Missing sensors:

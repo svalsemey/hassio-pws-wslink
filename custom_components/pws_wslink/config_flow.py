@@ -21,7 +21,7 @@ from .const import (
     INVALID_CREDENTIALS,
     SENSORS_TO_LOAD,
     WSLINK,
-    WSLINK_ADDON_URL,
+    URL_WSLINK_ADDON,
 )
 from .helpers import ha_https_enabled
 
@@ -103,7 +103,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             # retain sensors
             user_input.update(self.sensors)
 
-            if user_input.get(WSLINK, False) and not ha_https_enabled(self):
+            if not ha_https_enabled(self):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 
@@ -141,7 +141,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             ),
             errors=errors,
             description_placeholders={
-                "wslink_addon_url": WSLINK_ADDON_URL,
+                "url_wslink_addon": URL_WSLINK_ADDON,
             },
         )
 
@@ -182,7 +182,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         elif user_input[API_KEY] == user_input[API_ID]:
             errors["base"] = "valid_credentials_match"
         else:
-            if user_input.get(WSLINK, False) and not ha_https_enabled(self):
+            if not ha_https_enabled(self):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 
@@ -221,7 +221,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
             description_placeholders={
-                "wslink_addon_url": WSLINK_ADDON_URL,
+                "url_wslink_addon": URL_WSLINK_ADDON,
             },
         )
 

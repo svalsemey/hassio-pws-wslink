@@ -22,8 +22,8 @@ from .const import (
     DEV_DBG,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
-    REMAP_ITEMS,
-    REMAP_WSLINK_ITEMS,
+    REMAP_ITEMS_PWS,
+    REMAP_ITEMS_WSLINK,
     SENSORS_TO_LOAD,
     VOC_LEVEL_MAP,
     WIND_SPEED,
@@ -169,8 +169,8 @@ def remap_items(entities):
     """Remap items in query."""
     items = {}
     for item in entities:
-        if item in REMAP_ITEMS:
-            items[REMAP_ITEMS[item]] = entities[item]
+        if item in REMAP_ITEMS_PWS:
+            items[REMAP_ITEMS_PWS[item]] = entities[item]
 
     return items
 
@@ -179,8 +179,8 @@ def remap_wslink_items(entities):
     """Remap items in query for WSLink API."""
     items = {}
     for item in entities:
-        if item in REMAP_WSLINK_ITEMS:
-            items[REMAP_WSLINK_ITEMS[item]] = entities[item]
+        if item in REMAP_ITEMS_WSLINK:
+            items[REMAP_ITEMS_WSLINK[item]] = entities[item]
 
     for conn_key, gated in CONNECTION_GATED_SENSORS.items():
         if str(entities.get(conn_key, "0")) != "1":

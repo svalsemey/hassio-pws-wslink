@@ -4,9 +4,9 @@ from enum import StrEnum
 from typing import Final
 
 DOMAIN = "pws_wslink"
-DEFAULT_URL = "/weatherstation/updateweatherstation.php"
-WSLINK_URL = "/data/upload.php"
-WSLINK_ADDON_URL: Final = "https://github.com/schizza/wslink-addon"
+URI_API_PWS = "/weatherstation/updateweatherstation.php"
+URI_API_WSLINK = "/data/upload.php"
+URL_WSLINK_ADDON: Final = "https://github.com/schizza/wslink-addon"
 DATABASE_PATH = "/config/home-assistant_v2.db"
 
 ICON = "mdi:weather"
@@ -34,8 +34,11 @@ INVALID_CREDENTIALS: Final = [
 
 
 BARO_PRESSURE: Final = "baro_pressure"
-OUTSIDE_TEMP: Final = "outside_temp"
 DEW_POINT: Final = "dew_point"
+INDOOR_TEMP: Final = "indoor_temp"
+INDOOR_HUMIDITY: Final = "indoor_humidity"
+INDOOR_BATTERY: Final = "indoor_battery"
+OUTSIDE_TEMP: Final = "outside_temp"
 OUTSIDE_HUMIDITY: Final = "outside_humidity"
 OUTSIDE_CONNECTION: Final = "outside_connection"
 OUTSIDE_BATTERY: Final = "outside_battery"
@@ -50,9 +53,6 @@ RAINFALL_MONTHLY: Final = "rainfall_monthly"
 RAINFALL_YEARLY: Final = "rainfall_yearly"
 RAINFALL_DAILY: Final = "rainfall_daily"
 SOLAR_RADIATION: Final = "solar_radiation"
-INDOOR_TEMP: Final = "indoor_temp"
-INDOOR_HUMIDITY: Final = "indoor_humidity"
-INDOOR_BATTERY: Final = "indoor_battery"
 UV: Final = "uv"
 CH1_TEMP: Final = "ch1_temp"
 CH1_HUMIDITY: Final = "ch1_humidity"
@@ -86,6 +86,10 @@ HEAT_INDEX: Final = "heat_index"
 FEELS_LIKE: Final = "feels_like"
 CHILL_INDEX: Final = "chill_index"
 WBGT_TEMP: Final = "wbgt_temp"
+
+# T5 sensors are lightning related
+T5_BATTERY: Final = "t5_battery"
+T5_CONN: Final = "t5_conn"
 LIGHTNING_STRIKE_TIME: Final = "lightning_last_strike_time"
 LIGHTNING_DISTANCE: Final = "lightning_distance"
 LIGHTNING_STRIKE_COUNT_LAST_HOUR: Final = "lightning_strike_count_last_hour"
@@ -97,18 +101,20 @@ LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES: Final = (
 )
 LIGHTNING_STRIKE_COUNT_DURING_1_HOUR: Final = "lightning_strike_count_during_1_hour"
 LIGHTNING_STRIKE_COUNT_DURING_1_DAY: Final = "lightning_strike_count_during_1_day"
-T5_BATTERY: Final = "t5_battery"
-T5_CONN: Final = "t5_conn"
+
+# T9 sensors are HCHO and VOC
+T9_BATTERY: Final = "t9_battery"
+T9_CONN: Final = "t9_conn"
 HCHO: Final = "hcho"
 VOC: Final = "voc"
-T9_BATTERY: Final = "t9_battery"  # T9 sensors are HCHO and VOC
-T9_CONN: Final = "t9_conn"
-CO2: Final = "co2"
-T10_BATTERY: Final = "t10_battery"  # T10 sensors is CO²
+
+# T10 sensors are CO²
+T10_BATTERY: Final = "t10_battery"
 T10_CONN: Final = "t10_conn"
+CO2: Final = "co2"
 
 
-REMAP_ITEMS: dict[str, str] = {
+REMAP_ITEMS_PWS: dict[str, str] = {
     "baromin": BARO_PRESSURE,
     "tempf": OUTSIDE_TEMP,
     "dewptf": DEW_POINT,
@@ -138,7 +144,7 @@ REMAP_ITEMS: dict[str, str] = {
     "soilmoisture7": CH7_HUMIDITY,
 }
 
-REMAP_WSLINK_ITEMS: dict[str, str] = {
+REMAP_ITEMS_WSLINK: dict[str, str] = {
     "intem": INDOOR_TEMP,
     "inhum": INDOOR_HUMIDITY,
     "inbat": INDOOR_BATTERY,

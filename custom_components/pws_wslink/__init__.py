@@ -14,12 +14,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     API_ID,
     API_KEY,
-    DEFAULT_URL,
+    URI_API_PWS,
     DEV_DBG,
     DOMAIN,
     SENSORS_TO_LOAD,
     WSLINK,
-    WSLINK_URL,
+    URI_API_WSLINK,
 )
 from .routes import Routes, unregistered
 from .helpers import (
@@ -145,7 +145,7 @@ def register_path(
 
         try:
             default_route = hass.http.app.router.add_get(
-                DEFAULT_URL,
+                URI_API_PWS,
                 coordinator.received_data if not _wslink else unregistered,
                 name="weather_default_url",
             )
@@ -153,7 +153,7 @@ def register_path(
                 _LOGGER.debug("Default route: %s", default_route)
 
             wslink_route = hass.http.app.router.add_get(
-                WSLINK_URL,
+                URI_API_WSLINK,
                 coordinator.received_data if _wslink else unregistered,
                 name="weather_wslink_url",
             )
@@ -161,7 +161,7 @@ def register_path(
                 _LOGGER.debug("WSLink route: %s", wslink_route)
 
             wslink_post_route = hass.http.app.router.add_post(
-                WSLINK_URL,
+                URI_API_WSLINK,
                 coordinator.received_data if _wslink else unregistered,
                 name="weather_wslink_post_route_url",
             )
@@ -169,17 +169,17 @@ def register_path(
                 _LOGGER.debug("WSLink route: %s", wslink_post_route)
 
             routes.add_route(
-                DEFAULT_URL,
+                URI_API_PWS,
                 default_route,
                 coordinator.received_data if not _wslink else unregistered,
                 not _wslink,
             )
             routes.add_route(
-                WSLINK_URL, wslink_route, coordinator.received_data, _wslink
+                URI_API_WSLINK, wslink_route, coordinator.received_data, _wslink
             )
 
             routes.add_route(
-                WSLINK_URL, wslink_post_route, coordinator.received_data, _wslink
+                URI_API_WSLINK, wslink_post_route, coordinator.received_data, _wslink
             )
 
             hass_data["routes"] = routes
@@ -201,9 +201,9 @@ def register_path(
         )
 
     if _wslink:
-        routes.switch_route(coordinator.received_data, WSLINK_URL)
+        routes.switch_route(coordinator.received_data, URI_API_WSLINK)
     else:
-        routes.switch_route(coordinator.received_data, DEFAULT_URL)
+        routes.switch_route(coordinator.received_data, URI_API_PWS)
 
     return routes
 
@@ -223,7 +223,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.debug("WS Link is %s", "enbled" if _wslink else "disabled")
 
     route = register_path(
-        hass, DEFAULT_URL if not _wslink else WSLINK_URL, coordinator, entry
+        hass, URI_API_PWS if not _wslink else URI_API_WSLINK, coordinator, entry
     )
 
     if not route:
