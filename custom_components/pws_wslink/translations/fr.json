@@ -169,7 +169,7 @@
                 "name": "Précipitations (cumul horaire)"
             },
             "rainfall_daily": {
-                "name": "Précipitations (cumul quotidien)"
+                "name": "Précipitations (cumul journalier)"
             },
             "rainfall_weekly": {
                 "name": "Précipitations (cumul hebdomadaire)"
