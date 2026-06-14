@@ -52,8 +52,8 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 
 ### Manual Installation
 
-1. Copy `custom_components/weather_station` into your Home Assistant config:
-   - `config/custom_components/weather_station`
+1. Copy `custom_components/pws_wslink` into your Home Assistant config:
+   - `config/custom_components/pws_wslink`
 2. Restart Home Assistant
 3. Add integration from **Settings → Devices & Services**
 
@@ -67,10 +67,30 @@ When adding the integration:
 - `API_KEY`: password/key configured on the station
 - `WSLink API`:
   - **Disabled** = PWS/WU endpoint mode
-  - **Enabled** = WSLink endpoint mode
+  - **Enabled** = WSLink endpoint mode (**often requires HTTPS endpoint**)
 - `Developer log` (optional): verbose diagnostics in logs
 
 No YAML is needed.
+
+---
+
+## ⚠️ Important — WSLink requires HTTPS in many setups
+
+When **WSLink API** is enabled, many recent weather stations send data **only over HTTPS**.
+
+If your Home Assistant is not reachable over HTTPS on your local network, WSLink uploads may fail.
+In that case, you must either:
+
+1. Put Home Assistant behind your own HTTPS reverse proxy, **or**
+2. Install the **WSLink proxy add-on**:
+   - https://github.com/schizza/wslink-addon
+
+The WSLink proxy add-on terminates TLS (HTTPS) from the station and forwards requests to Home Assistant over local HTTP.
+
+### Quick rule
+
+- **WSLink + station sends HTTPS** → HTTPS endpoint is required (proxy/add-on or native HTTPS HA)
+- **PWS/WU over plain HTTP** → proxy is usually not required
 
 ---
 
@@ -78,9 +98,9 @@ No YAML is needed.
 
 Configure your station custom upload target to your Home Assistant host.
 
-- **PWS/WU mode**: use endpoint  
+- **PWS/WU mode**: use endpoint
   `/weatherstation/updateweatherstation.php`
-- **WSLink mode**: use endpoint  
+- **WSLink mode**: use endpoint
   `/data/upload.php`
 
 Use the same `API_ID` / `API_KEY` on both station and integration config.
@@ -119,7 +139,7 @@ Enable debug logs:
 logger:
   default: info
   logs:
-    custom_components.weather_station: debug
+    custom_components.pws_wslink: debug
 ```
 
 ---
