@@ -46,14 +46,14 @@
                 "data": {
                     "API_ID": "API ID / Station ID",
                     "API_KEY": "API KEY / Password",
-                    "WSLINK": "WSLink API",
-                    "dev_debug_checkbox": "Developer log"
+                    "dev_debug_checkbox": "Developer log",
+                    "wslink": "WSLink API"
                 },
                 "data_description": {
-                    "dev_debug_checkbox": "Enable only if you want to send debuging data to the developer.",
                     "API_ID": "API ID is the Station ID you set in the Weather Station.",
                     "API_KEY": "API KEY is the password you set in the Weather Station.",
-                    "WSLINK": "Enable WSLink API if the station is set to send data via WSLink."
+                    "wslink": "Enable WSLink API if the station is set to send data via WSLink.",
+                    "dev_debug_checkbox": "Enable only if you want to send debuging data to the developer."
                 }
             },
             "migration": {

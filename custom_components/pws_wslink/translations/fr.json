@@ -13,14 +13,14 @@
                 "data": {
                     "API_ID": "Identifiant API / Identifiant de station",
                     "API_KEY": "Clé API / Mot de passe",
-                    "WSLINK": "API WSLink",
-                    "dev_debug_checkbox": "Journal de débogage"
+                    "dev_debug_checkbox": "Journal de débogage",
+                    "wslink": "API WSLink"
                 },
                 "data_description": {
-                    "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur.",
                     "API_ID": "L’identifiant API correspond à l’identifiant de station défini dans la station météo.",
                     "API_KEY": "La clé API correspond au mot de passe défini dans la station météo.",
-                    "WSLINK": "Activez l’API WSLink si la station est configurée pour envoyer les données via WSLink."
+                    "wslink": "Activez l’API WSLink si la station est configurée pour envoyer les données via WSLink.",
+                    "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur."
                 }
             },
             "wslink_warning": {
