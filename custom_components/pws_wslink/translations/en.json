@@ -46,8 +46,8 @@
                 "data": {
                     "API_ID": "API ID / Station ID",
                     "API_KEY": "API KEY / Password",
-                    "dev_debug_checkbox": "Developer log",
-                    "wslink": "WSLink API"
+                    "wslink": "WSLink API",
+                    "dev_debug_checkbox": "Developer log"
                 },
                 "data_description": {
                     "API_ID": "API ID is the Station ID you set in the Weather Station.",
