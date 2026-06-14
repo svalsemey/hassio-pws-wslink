@@ -22,6 +22,10 @@ from .const import (
     DOMAIN,
     HEAT_INDEX,
     LIGHTNING_DISTANCE,
+    LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
+    LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
+    LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
     LIGHTNING_STRIKE_COUNT_LAST_HOUR,
     LIGHTNING_STRIKE_TIME,
     MANUFACTURER,
@@ -43,8 +47,6 @@ from .helpers import (
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_pws import SENSOR_TYPES_PWS
 from .sensors_wslink import SENSOR_TYPES_WSLINK
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -163,11 +165,6 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         except TypeError, ValueError:
             return None
 
-    @staticmethod
-    def _has_value(value) -> bool:
-        """Return True if payload value is usable."""
-        return value not in (None, "")
-
     @property
     def available(self) -> bool:
         """Bootstrap-safe availability.
@@ -207,6 +204,7 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return stable lightning last-strike timestamp.
 
         Strict rule:
+        - On fresh install (no stored timestamp), keep unknown while all strike counters are 0.
         - Update timestamp ONLY when:
         1) minutes-since-strike drops (counter reset/new strike)
         2) and strike count over last hour increases at the same time.
@@ -221,6 +219,13 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         minutes_now = self._to_int(raw_minutes)
         count_now = self._to_int(raw_count)
 
+        # Fresh install behavior:
+        # no known last strike yet + no strike counters > 0 => unknown
+        if self._last_lightning_ts is None and not self._has_any_lightning_strike():
+            self._last_lightning_minutes = minutes_now
+            self._last_lightning_count_last_hour = count_now
+            return None
+
         # No usable current value -> keep last coherent one
         if minutes_now is None:
             return self._last_lightning_ts
@@ -229,7 +234,7 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         if candidate_ts is None:
             return self._last_lightning_ts
 
-        # First coherent sample (cold start without restore)
+        # First coherent sample (after first detected strike or restored state)
         if self._last_lightning_ts is None:
             self._last_lightning_ts = candidate_ts
             self._last_lightning_minutes = minutes_now
@@ -306,6 +311,25 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._last_lightning_count_last_hour = count_now
 
         return self._last_lightning_distance
+
+    def _has_any_lightning_strike(self) -> bool:
+        """Return True if at least one lightning counter is > 0."""
+        data = self.coordinator.data
+        if not isinstance(data, dict):
+            return False
+
+        for key in (
+            LIGHTNING_STRIKE_COUNT_LAST_HOUR,
+            LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+            LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
+            LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
+            LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
+        ):
+            value = self._to_int(data.get(key))
+            if value is not None and value > 0:
+                return True
+
+        return False
 
     @property
     def native_value(self):  # pyright: ignore[reportIncompatibleVariableOverride]

@@ -60,8 +60,6 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
 
         data = dict(get_data) | dict(post_data)
 
-        response = None
-
         if not is_wslink and ("ID" not in data or "PASSWORD" not in data):
             _LOGGER.error("Invalid request. No security data provided!")
             raise HTTPUnauthorized
@@ -87,17 +85,16 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
         remaped_items = remap_wslink_items(data) if is_wslink else remap_items(data)
 
         if sensors := check_disabled(self.hass, remaped_items, self.config):
-            translate_sensors = [
-                await translations(
+            # Translate sensor labels only once per key.
+            translated_names: list[str] = []
+            for t_key in sensors:
+                name = await translations(
                     self.hass, DOMAIN, f"sensor.{t_key}", key="name", category="entity"
                 )
-                for t_key in sensors
-                if await translations(
-                    self.hass, DOMAIN, f"sensor.{t_key}", key="name", category="entity"
-                )
-                is not None
-            ]
-            human_readable = "\n".join(translate_sensors)
+                if name:
+                    translated_names.append(name)
+
+            human_readable = "\n".join(translated_names)
 
             await translated_notification(
                 self.hass,
@@ -105,18 +102,18 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                 "new_sensors",
                 {"added_sensors": f"{human_readable}\n"},
             )
-            if _loaded_sensors := loaded_sensors(self.config_entry):
-                sensors.extend(_loaded_sensors)
-            await update_options(self.hass, self.config_entry, SENSORS_TO_LOAD, sensors)
-            # await self.hass.config_entries.async_reload(self.config.entry_id)
+
+            loaded = loaded_sensors(self.config_entry) or []
+            # Merge without duplicates, keep insertion order.
+            merged = list(dict.fromkeys([*loaded, *sensors]))
+            await update_options(self.hass, self.config_entry, SENSORS_TO_LOAD, merged)
 
         self.async_set_updated_data(remaped_items)
 
         if self.config_entry.options.get(DEV_DBG):
             _LOGGER.info("Dev log: %s", anonymize(data))
 
-        response = response or "OK"
-        return aiohttp.web.Response(body=f"{response or 'OK'}", status=200)
+        return aiohttp.web.Response(body="OK", status=200)
 
 
 def register_path(
@@ -217,7 +214,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     debug = entry.options.get(DEV_DBG)
 
     if debug:
-        _LOGGER.debug("WS Link is %s", "enbled" if is_wslink else "disabled")
+        _LOGGER.debug("WS Link is %s", "enabled" if is_wslink else "disabled")
 
     route = register_path(
         hass, URI_API_PWS if not is_wslink else URI_API_WSLINK, coordinator, entry
