@@ -46,7 +46,7 @@ INDOOR_HUMIDITY: Final = "indoor_humidity"
 INDOOR_BATTERY: Final = "indoor_battery"
 OUTSIDE_TEMP: Final = "outside_temp"
 OUTSIDE_HUMIDITY: Final = "outside_humidity"
-OUTSIDE_CONNECTION: Final = "outside_connection"
+OUTSIDE_CONNECTION: Final = "outsideconnection"
 OUTSIDE_BATTERY: Final = "outside_battery"
 TEMPERATURE: Final = "temperature"
 WIND_SPEED: Final = "wind_speed"
@@ -70,12 +70,12 @@ WBGT_TEMP: Final = "wbgt_temp"
 T234_TEMP_KEYS: list[str] = [f"ch{i}_temp" for i in range(1, 8)]
 T234_HUMIDITY_KEYS: list[str] = [f"ch{i}_humidity" for i in range(1, 8)]
 T234_BATTERY_KEYS: list[str] = [f"ch{i}_battery" for i in range(1, 8)]
-T234_CONNECTION_KEYS: list[str] = [f"ch{i}_connection" for i in range(1, 8)]
+T234_CONNECTION_KEYS: list[str] = [f"ch{i}connection" for i in range(1, 8)]
 
 
 # T5 sensors are lightning related
 T5_BATTERY: Final = "t5_battery"
-T5_CONN: Final = "t5_conn"
+T5_CONNECTION: Final = "t5connection"
 LIGHTNING_STRIKE_TIME: Final = "lightning_last_strike_time"
 LIGHTNING_DISTANCE: Final = "lightning_distance"
 LIGHTNING_STRIKE_COUNT_LAST_HOUR: Final = "lightning_strike_count_last_hour"
@@ -91,11 +91,11 @@ LIGHTNING_STRIKE_COUNT_DURING_1_DAY: Final = "lightning_strike_count_during_1_da
 # Type6 (water leak channels 1..7)
 T6_WATER_LEAK_KEYS: list[str] = [f"t6_c{i}_water_leak" for i in range(1, 8)]
 T6_BATTERY_KEYS: list[str] = [f"t6_c{i}_battery" for i in range(1, 8)]
-T6_CONNECTION_KEYS: list[str] = [f"t6_c{i}_connection" for i in range(1, 8)]
+T6_CONNECTION_KEYS: list[str] = [f"t6c{i}connection" for i in range(1, 8)]
 
 # Type 8 (PM2.5/PM10)
 T8_BATTERY: Final = "t8_battery"
-T8_CONN: Final = "t8_conn"
+T8_CONNECTION: Final = "t8connection"
 PM25: Final = "pm25"
 PM10: Final = "pm10"
 PM25_AQI: Final = "pm25_aqi"
@@ -103,21 +103,32 @@ PM10_AQI: Final = "pm10_aqi"
 
 # Type 9 (HCHO/VOC)
 T9_BATTERY: Final = "t9_battery"
-T9_CONN: Final = "t9_conn"
+T9_CONNECTION: Final = "t9connection"
 HCHO: Final = "hcho"
 VOC: Final = "voc"
 
 # Type 10 (CO₂)
 T10_BATTERY: Final = "t10_battery"
-T10_CONN: Final = "t10_conn"
+T10_CONNECTION: Final = "t10connection"
 CO2: Final = "co2"
 
 WATER_LEAK: Final = "water_leak"
 
 # Type11 (CO)
 T11_BATTERY: Final = "t11_battery"
-T11_CONN: Final = "t11_conn"
+T11_CONNECTION: Final = "t11connection"
 CO: Final = "co"
+
+CONNECTION_KEYS: Final[list[str]] = [
+    OUTSIDE_CONNECTION,
+    *T234_CONNECTION_KEYS,
+    T5_CONNECTION,
+    *T6_CONNECTION_KEYS,
+    T8_CONNECTION,
+    T9_CONNECTION,
+    T10_CONNECTION,
+    T11_CONNECTION,
+]
 
 WATER_LEAK_LIST: list[str] = T6_WATER_LEAK_KEYS
 
@@ -184,7 +195,7 @@ REMAP_ITEMS_WSLINK: dict[str, str] = {
     "t5ls1htc": LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
     "t5ls1dtc": LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
     "t5lsbat": T5_BATTERY,
-    "t5lscn": T5_CONN,
+    "t5lscn": T5_CONNECTION,
     **{f"t6c{i + 1}wls": T6_WATER_LEAK_KEYS[i] for i in range(7)},
     **{f"t6c{i + 1}bat": T6_BATTERY_KEYS[i] for i in range(7)},
     **{f"t6c{i + 1}cn": T6_CONNECTION_KEYS[i] for i in range(7)},
@@ -193,17 +204,17 @@ REMAP_ITEMS_WSLINK: dict[str, str] = {
     "t8pm25ai": PM25_AQI,
     "t8pm10ai": PM10_AQI,
     "t8bat": T8_BATTERY,
-    "t8cn": T8_CONN,
+    "t8cn": T8_CONNECTION,
     "t9hcho": HCHO,
     "t9voclv": VOC,
     "t9bat": T9_BATTERY,  # T9 battery is 0-5, where 5 is full
-    "t9cn": T9_CONN,
+    "t9cn": T9_CONNECTION,
     "t10co2": CO2,
     "t10bat": T10_BATTERY,  # T10 battery is 0-5, where 5 is full
-    "t10cn": T10_CONN,
+    "t10cn": T10_CONNECTION,
     "t11co": CO,
     "t11bat": T11_BATTERY,
-    "t11cn": T11_CONN,
+    "t11cn": T11_CONNECTION,
 }
 
 DISABLED_BY_DEFAULT: Final = [
@@ -279,7 +290,7 @@ CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
         for i in range(7)
     },
     # Type5 lightning
-    T5_CONN: [
+    T5_CONNECTION: [
         LIGHTNING_STRIKE_TIME,
         LIGHTNING_DISTANCE,
         LIGHTNING_STRIKE_COUNT_LAST_HOUR,
@@ -295,10 +306,10 @@ CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
         for i in range(7)
     },
     # Type8 / Type9 / Type10 / Type11
-    T8_CONN: [PM25, PM10, PM25_AQI, PM10_AQI, T8_BATTERY],
-    T9_CONN: [HCHO, VOC, T9_BATTERY],
-    T10_CONN: [CO2, T10_BATTERY],
-    T11_CONN: [CO, T11_BATTERY],
+    T8_CONNECTION: [PM25, PM10, PM25_AQI, PM10_AQI, T8_BATTERY],
+    T9_CONNECTION: [HCHO, VOC, T9_BATTERY],
+    T10_CONNECTION: [CO2, T10_BATTERY],
+    T11_CONNECTION: [CO, T11_BATTERY],
 }
 
 

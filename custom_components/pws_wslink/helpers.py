@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AZIMUTH,
     CONNECTION_GATED_SENSORS,
+    CONNECTION_KEYS,
     DATABASE_PATH,
     DEV_DBG,
     OUTSIDE_HUMIDITY,
@@ -214,6 +215,10 @@ def remap_items_wslink(entities):
         for sensor_key in gated:
             items.pop(sensor_key, None)
 
+    # Connection markers are internal-only: never expose them as discoverable sensors.
+    for conn_key in CONNECTION_KEYS:
+        items.pop(conn_key, None)
+
     return items
 
 
@@ -239,6 +244,10 @@ def check_disabled(
     missing_sensors: list = []
 
     for item in items:
+        # Never discover connection markers as entities.
+        if item in CONNECTION_KEYS:
+            continue
+
         if log:
             _LOGGER.info("Checking %s", item)
 
