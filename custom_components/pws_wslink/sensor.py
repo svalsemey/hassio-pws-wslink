@@ -5,7 +5,7 @@ from datetime import datetime
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import generate_entity_id
+from homeassistant.helpers.entity import EntityCategory, generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -29,12 +29,14 @@ from .const import (
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
     SENSORS_TO_LOAD,
+    T234_TEMP_KEYS,
+    T6_WATER_LEAK_KEYS,
     WIND_AZIMUTH,
     WIND_DIR,
     WIND_SPEED,
     UnitOfBat,
 )
-from .device_map import device_info_for_key
+from .device_map import device_info_for_key, module_for_key
 from .helpers import (
     battery_level_to_icon,
     battery_level_to_text,
@@ -47,6 +49,73 @@ from .sensors_pws import SENSOR_TYPES_PWS
 from .sensors_wslink import SENSOR_TYPES_WSLINK
 
 
+class ChannelDiagnosticSensor(SensorEntity):
+    """Static diagnostic sensor exposing channel number for channel-based modules."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "channel_number"
+    _attr_icon = "mdi:numeric"
+
+    def __init__(
+        self,
+        config_entry: ConfigEntry,
+        module: str,
+        channel: int,
+        device_key: str,
+    ) -> None:
+        """Initialize diagnostic channel sensor."""
+        self._config_entry = config_entry
+        self._module = module
+        self._device_key = device_key
+        self._attr_unique_id = f"{module}_channel_number"
+        self._attr_native_value = channel
+
+    @property
+    def suggested_entity_id(self) -> str:
+        """Return suggested entity id."""
+        return generate_entity_id("sensor.{}", f"{self._module}_channel_number")
+
+    @property
+    def device_info(self):
+        """Attach diagnostic sensor to the corresponding module device."""
+        return device_info_for_key(self._config_entry, self._device_key)
+
+
+def _channel_diagnostic_entities(
+    config_entry: ConfigEntry,
+    loaded_keys: list[str],
+) -> list[ChannelDiagnosticSensor]:
+    """Build one diagnostic 'channel number' sensor per channel-based device."""
+    modules: dict[str, tuple[int, str]] = {}
+
+    for key in loaded_keys:
+        module = module_for_key(key)
+
+        if module.startswith("t234c"):
+            ch_txt = module[5:]
+            if ch_txt.isdigit():
+                ch = int(ch_txt)
+                if 1 <= ch <= 7:
+                    modules.setdefault(module, (ch, T234_TEMP_KEYS[ch - 1]))
+            continue
+
+        if module.startswith("t6c"):
+            ch_txt = module[3:]
+            if ch_txt.isdigit():
+                ch = int(ch_txt)
+                if 1 <= ch <= 7:
+                    modules.setdefault(module, (ch, T6_WATER_LEAK_KEYS[ch - 1]))
+
+    return [
+        ChannelDiagnosticSensor(config_entry, module, channel, device_key)
+        for module, (channel, device_key) in sorted(
+            modules.items(), key=lambda item: item[1][0]
+        )
+    ]
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -56,27 +125,32 @@ async def async_setup_entry(
 
     coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    sensors_to_load: list = []
-    sensors: list = []
+    sensors: list[SensorEntity] = []
     is_wslink = config_entry.options.get(API_MODE) == API_MODE_WSLINK
-
     sensor_types = SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS
 
-    # Check if we have some sensors to load.
-    if sensors_to_load := config_entry.options.get(SENSORS_TO_LOAD, []):
-        if WIND_DIR in sensors_to_load:
-            sensors_to_load.append(WIND_AZIMUTH)
-        if (OUTSIDE_HUMIDITY in sensors_to_load) and (OUTSIDE_TEMP in sensors_to_load):
-            sensors_to_load.append(HEAT_INDEX)
+    loaded_keys = config_entry.options.get(SENSORS_TO_LOAD, [])
+    if isinstance(loaded_keys, list) and loaded_keys:
+        requested = list(loaded_keys)
 
-        if (WIND_SPEED in sensors_to_load) and (OUTSIDE_TEMP in sensors_to_load):
-            sensors_to_load.append(CHILL_INDEX)
-        sensors = [
+        if WIND_DIR in requested:
+            requested.append(WIND_AZIMUTH)
+        if (OUTSIDE_HUMIDITY in requested) and (OUTSIDE_TEMP in requested):
+            requested.append(HEAT_INDEX)
+        if (WIND_SPEED in requested) and (OUTSIDE_TEMP in requested):
+            requested.append(CHILL_INDEX)
+
+        sensors.extend(
             WeatherSensor(hass, description, coordinator)
             for description in sensor_types
-            if description.key in sensors_to_load
+            if description.key in requested
             and not (is_wslink and description.key in BATTERY_LIST)
-        ]
+        )
+
+        # Add static diagnostic channel entities (Type2/3/4 and Type6 devices)
+        sensors.extend(_channel_diagnostic_entities(config_entry, loaded_keys))
+
+    if sensors:
         async_add_entities(sensors)
 
 

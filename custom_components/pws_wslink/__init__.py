@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import InvalidStateError, PlatformNotReady
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -21,10 +22,16 @@ from .const import (
     DEV_DBG,
     DOMAIN,
     SENSORS_TO_LOAD,
+    T6_BATTERY_KEYS,
+    T6_WATER_LEAK_KEYS,
+    T234_BATTERY_KEYS,
+    T234_HUMIDITY_KEYS,
+    T234_TEMP_KEYS,
     URI_API_PWS,
     URI_API_WSLINK,
     WATER_LEAK_LIST,
 )
+from .device_map import module_for_key
 from .helpers import (
     anonymize,
     check_disabled,
@@ -43,6 +50,119 @@ PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 class IncorrectDataError(InvalidStateError):
     """Invalid exception."""
+
+
+def _parse_connected(value) -> bool | None:
+    """Parse WSLink connection flag (1/0)."""
+    if value in (None, ""):
+        return None
+    try:
+        return int(float(value)) == 1
+    except TypeError, ValueError:
+        return None
+
+
+def _wslink_inactive_channel_modules(raw_data: dict) -> set[str]:
+    """Return inactive WSLink channel modules (Type234 / Type6).
+
+    Inactive means: cn missing, empty, or not equal to 1.
+    """
+    inactive: set[str] = set()
+
+    for idx in range(7):
+        ch = idx + 1
+
+        if _parse_connected(raw_data.get(f"t234c{ch}cn")) is not True:
+            inactive.add(f"t234c{ch}")
+
+        if _parse_connected(raw_data.get(f"t6c{ch}cn")) is not True:
+            inactive.add(f"t6c{ch}")
+
+    return inactive
+
+
+def _sensor_keys_for_channel_module(module: str) -> set[str]:
+    """Return all sensor keys belonging to one channel module."""
+    if module.startswith("t234c"):
+        ch_txt = module[5:]
+        if ch_txt.isdigit():
+            idx = int(ch_txt) - 1
+            if 0 <= idx < 7:
+                return {
+                    T234_TEMP_KEYS[idx],
+                    T234_HUMIDITY_KEYS[idx],
+                    T234_BATTERY_KEYS[idx],
+                }
+        return set()
+
+    if module.startswith("t6c"):
+        ch_txt = module[3:]
+        if ch_txt.isdigit():
+            idx = int(ch_txt) - 1
+            if 0 <= idx < 7:
+                return {
+                    T6_WATER_LEAK_KEYS[idx],
+                    T6_BATTERY_KEYS[idx],
+                }
+        return set()
+
+    return set()
+
+
+def _sensor_keys_for_channel_modules(modules: set[str]) -> set[str]:
+    """Return flattened sensor keys for multiple channel modules."""
+    keys: set[str] = set()
+    for module in modules:
+        keys.update(_sensor_keys_for_channel_module(module))
+    return keys
+
+
+def _channel_modules_from_keys(keys: set[str]) -> set[str]:
+    """Extract channel module ids from sensor keys."""
+    modules: set[str] = set()
+    for key in keys:
+        module = module_for_key(key)
+        if module.startswith("t234c") or module.startswith("t6c"):
+            modules.add(module)
+    return modules
+
+
+async def _async_remove_stale_channel_entities_and_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    inactive_modules: set[str],
+) -> None:
+    """Remove stale entities/devices for inactive WSLink channel modules."""
+    if not inactive_modules:
+        return
+
+    ent_reg = er.async_get(hass)
+
+    sensor_keys = _sensor_keys_for_channel_modules(inactive_modules)
+    target_unique_ids = set(sensor_keys)
+    target_unique_ids.update(f"{key}_binary" for key in sensor_keys)
+    target_unique_ids.update(f"{module}_channel_number" for module in inactive_modules)
+
+    for entity_id, reg_entry in list(ent_reg.entities.items()):
+        if reg_entry.config_entry_id != entry.entry_id:
+            continue
+        if reg_entry.unique_id in target_unique_ids:
+            ent_reg.async_remove(entity_id)
+
+    dev_reg = dr.async_get(hass)
+    for module in inactive_modules:
+        identifier = (DOMAIN, f"{entry.entry_id}_{module}")
+        device = dev_reg.async_get_device(identifiers={identifier})
+        if device is None:
+            continue
+
+        linked_entities = er.async_entries_for_device(
+            ent_reg, device_id=device.id, include_disabled_entities=True
+        )
+        if linked_entities:
+            continue
+
+        dev_reg.async_remove_device(device.id)
 
 
 def _notification_translation_candidates(sensor_key: str) -> list[str]:
@@ -109,12 +229,13 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
 
         remaped_items = remap_items_wslink(data) if is_wslink else remap_items_pws(data)
 
-        if sensors := check_disabled(self.hass, remaped_items, self.config):
-            # Translate sensor labels only once per key.
-            translated_names: list[str] = []
-            for t_key in sensors:
-                resolved_name = ""
+        loaded = loaded_sensors(self.config_entry) or []
+        discovered = check_disabled(self.hass, remaped_items, self.config) or []
 
+        if discovered:
+            translated_names: list[str] = []
+            for t_key in discovered:
+                resolved_name = ""
                 for tr_key in _notification_translation_candidates(t_key):
                     resolved_name = await translations(
                         self.hass,
@@ -125,12 +246,9 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                     if resolved_name:
                         break
-
-                # Last fallback: keep raw key to avoid empty notification lines
                 translated_names.append(resolved_name or t_key)
 
             human_readable = "\n".join(translated_names)
-
             await translated_notification(
                 self.hass,
                 DOMAIN,
@@ -138,9 +256,25 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                 {"added_sensors": f"{human_readable}\n"},
             )
 
-            loaded = loaded_sensors(self.config_entry) or []
-            # Merge without duplicates, keep insertion order.
-            merged = list(dict.fromkeys([*loaded, *sensors]))
+        merged = list(dict.fromkeys([*loaded, *discovered]))
+
+        if is_wslink:
+            inactive_modules = _wslink_inactive_channel_modules(data)
+            inactive_keys = _sensor_keys_for_channel_modules(inactive_modules)
+
+            if inactive_keys:
+                merged = [key for key in merged if key not in inactive_keys]
+
+            if merged != loaded:
+                await update_options(
+                    self.hass, self.config_entry, SENSORS_TO_LOAD, merged
+                )
+
+            if inactive_modules:
+                await _async_remove_stale_channel_entities_and_devices(
+                    self.hass, self.config_entry, inactive_modules
+                )
+        elif merged != loaded:
             await update_options(self.hass, self.config_entry, SENSORS_TO_LOAD, merged)
 
         self.async_set_updated_data(remaped_items)

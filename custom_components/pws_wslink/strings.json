@@ -98,6 +98,9 @@
             "temperature": { "name": "Temperature" },
             "humidity": { "name": "Humidity" },
             "battery": { "name": "Battery" },
+            "channel_number": {
+                "name": "Channel number"
+            },
             "uv": {
                 "name": "UV index"
             },
