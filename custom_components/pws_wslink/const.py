@@ -319,16 +319,14 @@ CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
 }
 
 # WSLink modules eligible for stale cleanup (all except Type1).
-WSLINK_PURGE_MODULES: Final[tuple[str, ...]] = tuple(
-    [
-        *[f"t234c{i}" for i in range(1, 8)],
-        "type5",
-        *[f"t6c{i}" for i in range(1, 8)],
-        "type8",
-        "type9",
-        "type10",
-        "type11",
-    ]
+WSLINK_PURGE_MODULES: Final[tuple[str, ...]] = (
+    *(f"t234c{i}" for i in range(1, 8)),
+    "type5",
+    *(f"t6c{i}" for i in range(1, 8)),
+    "type8",
+    "type9",
+    "type10",
+    "type11",
 )
 
 # Raw WSLink connection key for each purgeable module.

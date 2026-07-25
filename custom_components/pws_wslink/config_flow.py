@@ -1,6 +1,6 @@
 """Config flow for Weather Station integration."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 import voluptuous as vol
 
@@ -220,7 +220,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
 class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Weather Station."""
 
-    data_schema = {
+    data_schema: ClassVar[dict[Any, Any]] = {
         vol.Required(API_ID): str,
         vol.Required(API_KEY): str,
         vol.Required(

@@ -292,9 +292,18 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
 
         if is_wslink:
             inactive_modules = self._newly_confirmed_inactive_modules(data)
-            inactive_keys = _sensor_keys_for_modules(inactive_modules)
+
+            still_inactive_purged = {
+                module
+                for module in self._purged_modules
+                if self._module_connected_from_raw(data, module) is not True
+            }
+
+            effective_inactive_modules = inactive_modules | still_inactive_purged
+            inactive_keys = _sensor_keys_for_modules(effective_inactive_modules)
 
             if inactive_keys:
+                discovered = [key for key in discovered if key not in inactive_keys]
                 merged = [key for key in merged if key not in inactive_keys]
 
             if merged != loaded:
@@ -345,7 +354,7 @@ def register_path(
         try:
             default_route = hass.http.app.router.add_get(
                 URI_API_PWS,
-                coordinator.received_data if not is_wslink else unregistered,
+                routes.make_dispatcher("GET", URI_API_PWS),
                 name="weather_default_url",
             )
             if debug:
@@ -353,7 +362,7 @@ def register_path(
 
             wslink_route = hass.http.app.router.add_get(
                 URI_API_WSLINK,
-                coordinator.received_data if is_wslink else unregistered,
+                routes.make_dispatcher("GET", URI_API_WSLINK),
                 name="weather_wslink_url",
             )
             if debug:
@@ -361,7 +370,7 @@ def register_path(
 
             wslink_post_route = hass.http.app.router.add_post(
                 URI_API_WSLINK,
-                coordinator.received_data if is_wslink else unregistered,
+                routes.make_dispatcher("POST", URI_API_WSLINK),
                 name="weather_wslink_post_route_url",
             )
             if debug:
@@ -374,11 +383,16 @@ def register_path(
                 not is_wslink,
             )
             routes.add_route(
-                URI_API_WSLINK, wslink_route, coordinator.received_data, is_wslink
+                URI_API_WSLINK,
+                wslink_route,
+                coordinator.received_data if is_wslink else unregistered,
+                is_wslink,
             )
-
             routes.add_route(
-                URI_API_WSLINK, wslink_post_route, coordinator.received_data, is_wslink
+                URI_API_WSLINK,
+                wslink_post_route,
+                coordinator.received_data if is_wslink else unregistered,
+                is_wslink,
             )
 
             hass_data["routes"] = routes
