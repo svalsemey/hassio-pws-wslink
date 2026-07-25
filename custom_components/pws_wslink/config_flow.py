@@ -20,6 +20,10 @@ from .const import (
     API_MODE,
     API_MODE_PWS,
     API_MODE_WSLINK,
+    CLEANUP_INACTIVE_MIN_AGE_MIN,
+    CLEANUP_INACTIVE_STREAK,
+    DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
+    DEFAULT_CLEANUP_INACTIVE_STREAK,
     DEV_DBG,
     DOMAIN,
     INVALID_CREDENTIALS,
@@ -59,6 +63,12 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             API_ID: entry_data.get(API_ID),
             API_KEY: entry_data.get(API_KEY),
             API_MODE: entry_data.get(API_MODE, API_MODE_PWS),
+            CLEANUP_INACTIVE_STREAK: entry_data.get(
+                CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
+            ),
+            CLEANUP_INACTIVE_MIN_AGE_MIN: entry_data.get(
+                CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
+            ),
             DEV_DBG: entry_data.get(DEV_DBG, False),
         }
 
@@ -75,6 +85,32 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                         {"value": API_MODE_WSLINK, "label": "WS-Link"},
                     ],
                     mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional(
+                CLEANUP_INACTIVE_STREAK,
+                default=self.user_data.get(
+                    CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1,
+                    max=50,
+                    step=1,
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CLEANUP_INACTIVE_MIN_AGE_MIN,
+                default=self.user_data.get(
+                    CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1,
+                    max=120,
+                    step=1,
+                    mode=selector.NumberSelectorMode.BOX,
                 )
             ),
             vol.Optional(DEV_DBG, default=self.user_data.get(DEV_DBG, False)): bool,
@@ -119,6 +155,15 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 
+            user_input[CLEANUP_INACTIVE_STREAK] = int(
+                user_input.get(CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK)
+            )
+            user_input[CLEANUP_INACTIVE_MIN_AGE_MIN] = int(
+                user_input.get(
+                    CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
+                )
+            )
+
             # Do not rename config entry title during reconfiguration
             return self.async_create_entry(title=DOMAIN, data=user_input)
 
@@ -138,6 +183,18 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             if user_input.get(CONFIRM_HTTPS):
                 if self._pending_user_input is None:
                     return self.async_abort(reason="unknown")
+
+                self._pending_user_input[CLEANUP_INACTIVE_STREAK] = int(
+                    self._pending_user_input.get(
+                        CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
+                    )
+                )
+                self._pending_user_input[CLEANUP_INACTIVE_MIN_AGE_MIN] = int(
+                    self._pending_user_input.get(
+                        CLEANUP_INACTIVE_MIN_AGE_MIN,
+                        DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
+                    )
+                )
 
                 # Do not rename config entry title during reconfiguration
                 return self.async_create_entry(

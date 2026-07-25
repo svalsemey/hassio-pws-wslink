@@ -36,6 +36,12 @@ INVALID_CREDENTIALS: Final = [
     "_KEY",
 ]
 
+# Safe cleanup options (WSLink channel auto-cleanup)
+CLEANUP_INACTIVE_MIN_AGE_MIN: Final = "cleanup_inactive_min_age_min"
+CLEANUP_INACTIVE_STREAK: Final = "cleanup_inactive_streak"
+
+DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN: Final = 5
+DEFAULT_CLEANUP_INACTIVE_STREAK: Final = 3
 
 BARO_PRESSURE: Final = "baro_pressure"
 BATTERY: Final = "battery"
@@ -310,6 +316,63 @@ CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
     T9_CONNECTION: [HCHO, VOC, T9_BATTERY],
     T10_CONNECTION: [CO2, T10_BATTERY],
     T11_CONNECTION: [CO, T11_BATTERY],
+}
+
+# WSLink modules eligible for stale cleanup (all except Type1).
+WSLINK_PURGE_MODULES: Final[tuple[str, ...]] = tuple(
+    [
+        *[f"t234c{i}" for i in range(1, 8)],
+        "type5",
+        *[f"t6c{i}" for i in range(1, 8)],
+        "type8",
+        "type9",
+        "type10",
+        "type11",
+    ]
+)
+
+# Raw WSLink connection key for each purgeable module.
+WSLINK_CONNECTION_KEY_BY_MODULE: Final[dict[str, str]] = {
+    **{f"t234c{i + 1}": f"t234c{i + 1}cn" for i in range(7)},
+    "type5": "t5lscn",
+    **{f"t6c{i + 1}": f"t6c{i + 1}cn" for i in range(7)},
+    "type8": "t8cn",
+    "type9": "t9cn",
+    "type10": "t10cn",
+    "type11": "t11cn",
+}
+
+# Sensor keys attached to each purgeable module.
+WSLINK_SENSOR_KEYS_BY_MODULE: Final[dict[str, tuple[str, ...]]] = {
+    **{
+        f"t234c{i + 1}": (
+            T234_TEMP_KEYS[i],
+            T234_HUMIDITY_KEYS[i],
+            T234_BATTERY_KEYS[i],
+        )
+        for i in range(7)
+    },
+    "type5": (
+        LIGHTNING_STRIKE_TIME,
+        LIGHTNING_DISTANCE,
+        LIGHTNING_STRIKE_COUNT_LAST_HOUR,
+        LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+        LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
+        LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
+        LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
+        T5_BATTERY,
+    ),
+    **{
+        f"t6c{i + 1}": (
+            T6_WATER_LEAK_KEYS[i],
+            T6_BATTERY_KEYS[i],
+        )
+        for i in range(7)
+    },
+    "type8": (PM25, PM10, PM25_AQI, PM10_AQI, T8_BATTERY),
+    "type9": (HCHO, VOC, T9_BATTERY),
+    "type10": (CO2, T10_BATTERY),
+    "type11": (CO, T11_BATTERY),
 }
 
 

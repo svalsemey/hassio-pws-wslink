@@ -47,12 +47,16 @@
                     "API_ID": "Identifiant API / Identifiant de station",
                     "API_KEY": "Clé API / Mot de passe",
                     "api_mode": "Mode API",
+                    "cleanup_inactive_streak": "Échantillons inactifs avant nettoyage",
+                    "cleanup_inactive_min_age_min": "Temps d’inactivité minimum (minutes)",
                     "dev_debug_checkbox": "Journal de débogage"
                 },
                 "data_description": {
                     "API_ID": "L’identifiant API correspond à l’identifiant de station défini dans la station météo.",
                     "API_KEY": "La clé API correspond au mot de passe défini dans la station météo.",
                     "api_mode": "Sélectionnez le protocole utilisé par votre station pour envoyer les données.",
+                    "cleanup_inactive_streak": "Nombre d’échantillons consécutifs WSLink où un canal est déconnecté/manquant avant que le nettoyage puisse se produire.",
+                    "cleanup_inactive_min_age_min": "Temps minimum (en minutes) pendant lequel un canal doit rester déconnecté/manquant avant que le nettoyage puisse se produire.",
                     "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur."
                 }
             },

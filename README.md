@@ -31,6 +31,10 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 - WSLink battery handling:
   - Sensor battery values
   - Dedicated battery binary sensors (low/normal semantics)
+- WSLink stale module cleanup:
+  - Handles stale entities/devices when modules remain disconnected
+  - Applies to all WSLink module types except Type1 (base station)
+  - Uses a confirmation window to avoid aggressive deletion on partial payloads
 
 ---
 
@@ -67,12 +71,46 @@ When adding the integration:
 
 - `API_ID`: station ID/identifier configured on the station
 - `API_KEY`: password/key configured on the station
-- `WSLink API`:
-  - **Disabled** = PWS/WU endpoint mode
-  - **Enabled** = WSLink endpoint mode
+- `API mode`:
+  - `pws` = PWS/WU endpoint mode
+  - `wslink` = WSLink endpoint mode
 - `Developer log` (optional): verbose diagnostics in logs
 
 No YAML is needed.
+
+---
+
+## Options (UI)
+
+In integration options, you can configure:
+
+- Credentials and API mode (same as initial setup)
+- `Inactive samples before cleanup`
+  Number of consecutive WSLink payloads where a module is disconnected/missing before cleanup can occur
+- `Minimum inactivity time (minutes)`
+  Minimum duration a module must remain disconnected/missing before cleanup can occur
+
+Default cleanup values:
+
+- `Inactive samples before cleanup` = `3`
+- `Minimum inactivity time (minutes)` = `5`
+
+---
+
+## WSLink Stale Module Cleanup
+
+In WSLink mode, the integration can automatically clean up stale modules after confirmed inactivity.
+
+### Behavior
+
+Cleanup is triggered only when both conditions are met:
+
+1. A module is disconnected/missing for enough consecutive payloads (`Inactive samples before cleanup`)
+2. Inactivity lasts long enough (`Minimum inactivity time (minutes)`)
+
+When confirmed inactive, the integration removes module entities (including related `*_binary` entities) and removes the module device if no entities remain attached.
+
+If the module reconnects, inactivity tracking is reset.
 
 ---
 
@@ -117,13 +155,14 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
 - Before first payload after startup/reload, entities remain available (bootstrap-safe behavior).
 - After payloads are received, if a sensor is missing in incoming data, it becomes `unavailable`.
 - Entities are **not auto-disabled** in registry and are kept manageable by the user.
+- In WSLink mode, confirmed long-term inactivity can trigger stale module cleanup (see above).
 
 ---
 
 ## Supported Entity Types
 
 - **Sensor**
-- **Binary Sensor** (battery binary sensors for WSLink battery fields)
+- **Binary Sensor** (battery and water leak binary sensors in WSLink mode)
 
 ---
 
@@ -138,6 +177,9 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
   - Credentials in payload do not match integration options
 - Missing sensors:
   - Sensors appear only after station sends corresponding keys at least once
+- Entities/devices not removed immediately in WSLink:
+  - This is expected due to cleanup thresholds
+  - Check cleanup options in integration settings
 
 Enable debug logs:
 
