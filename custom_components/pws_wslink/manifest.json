@@ -14,6 +14,6 @@
   "issue_tracker": "https://github.com/svalsemey/hassio-pws-wslink",
   "requirements": [],
   "ssdp": [],
-  "version": "0.0.3",
+  "version": "0.0.5",
   "zeroconf": []
 }

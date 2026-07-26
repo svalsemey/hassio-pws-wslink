@@ -36,12 +36,14 @@ INVALID_CREDENTIALS: Final = [
     "_KEY",
 ]
 
-# Safe cleanup options (WSLink channel auto-cleanup)
+# Safe cleanup options (WSLink module auto-cleanup)
 CLEANUP_INACTIVE_MIN_AGE_MIN: Final = "cleanup_inactive_min_age_min"
 CLEANUP_INACTIVE_STREAK: Final = "cleanup_inactive_streak"
 
 DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN: Final = 5
 DEFAULT_CLEANUP_INACTIVE_STREAK: Final = 3
+
+WSLINK_PURGED_MODULES: Final = "wslink_purged_modules"
 
 BARO_PRESSURE: Final = "baro_pressure"
 BATTERY: Final = "battery"
@@ -318,8 +320,9 @@ CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
     T11_CONNECTION: [CO, T11_BATTERY],
 }
 
-# WSLink modules eligible for stale cleanup (all except Type1).
+# WSLink modules eligible for stale cleanup.
 WSLINK_PURGE_MODULES: Final[tuple[str, ...]] = (
+    "type1",
     *(f"t234c{i}" for i in range(1, 8)),
     "type5",
     *(f"t6c{i}" for i in range(1, 8)),
@@ -331,6 +334,7 @@ WSLINK_PURGE_MODULES: Final[tuple[str, ...]] = (
 
 # Raw WSLink connection key for each purgeable module.
 WSLINK_CONNECTION_KEY_BY_MODULE: Final[dict[str, str]] = {
+    "type1": "t1cn",
     **{f"t234c{i + 1}": f"t234c{i + 1}cn" for i in range(7)},
     "type5": "t5lscn",
     **{f"t6c{i + 1}": f"t6c{i + 1}cn" for i in range(7)},
@@ -342,6 +346,28 @@ WSLINK_CONNECTION_KEY_BY_MODULE: Final[dict[str, str]] = {
 
 # Sensor keys attached to each purgeable module.
 WSLINK_SENSOR_KEYS_BY_MODULE: Final[dict[str, tuple[str, ...]]] = {
+    "type1": (
+        OUTSIDE_TEMP,
+        OUTSIDE_HUMIDITY,
+        FEELS_LIKE,
+        CHILL_INDEX,
+        HEAT_INDEX,
+        DEW_POINT,
+        WIND_DIR,
+        WIND_AZIMUTH,
+        WIND_SPEED,
+        WIND_GUST,
+        RAIN_RATE,
+        RAINFALL_HOURLY,
+        RAINFALL_DAILY,
+        RAINFALL_WEEKLY,
+        RAINFALL_MONTHLY,
+        RAINFALL_YEARLY,
+        UV,
+        SOLAR_RADIATION,
+        WBGT_TEMP,
+        OUTSIDE_BATTERY,
+    ),
     **{
         f"t234c{i + 1}": (
             T234_TEMP_KEYS[i],

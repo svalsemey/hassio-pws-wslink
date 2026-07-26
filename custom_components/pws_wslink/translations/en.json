@@ -55,8 +55,8 @@
                     "API_ID": "API ID is the Station ID you set in the Weather Station.",
                     "API_KEY": "API KEY is the password you set in the Weather Station.",
                     "api_mode": "Select which protocol your station uses to send data.",
-                    "cleanup_inactive_streak": "Number of consecutive WSLink payloads where a channel is disconnected/missing before cleanup can occur.",
-                    "cleanup_inactive_min_age_min": "Minimum time (in minutes) a channel must stay disconnected/missing before cleanup can occur.",
+                    "cleanup_inactive_streak": "Number of consecutive WSLink payloads where a module is disconnected/missing before cleanup can occur.",
+                    "cleanup_inactive_min_age_min": "Minimum time (in minutes) a module must stay disconnected/missing before cleanup can occur.",
                     "dev_debug_checkbox": "Enable only if you want to send debugging data to the developer."
                 }
             },

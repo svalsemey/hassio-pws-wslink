@@ -26,8 +26,6 @@ from .const import (
     REMAP_ITEMS_PWS,
     REMAP_ITEMS_WSLINK,
     SENSORS_TO_LOAD,
-    T6_CONNECTION_KEYS,
-    T234_CONNECTION_KEYS,
     VOC_LEVEL_MAP,
     WIND_SPEED,
     UnitOfBat,
@@ -195,35 +193,13 @@ def remap_items_wslink(entities):
         if item in REMAP_ITEMS_WSLINK:
             items[REMAP_ITEMS_WSLINK[item]] = entities[item]
 
-    strict_channel_conn_keys = set(T234_CONNECTION_KEYS) | set(T6_CONNECTION_KEYS)
-
     for conn_key, gated in CONNECTION_GATED_SENSORS.items():
         # connection keys are remapped in `items`
         connected = _is_connected_flag(items.get(conn_key))
 
-        # Strict behavior for Type2/3/4 and Type6 channels:
+        # Uniform behavior for all WSLink modules:
         # if cn is missing / empty / 0 -> remove all gated sensors
-        if conn_key in strict_channel_conn_keys:
-            if connected is True:
-                continue
-            for sensor_key in gated:
-                items.pop(sensor_key, None)
-            continue
-
-        # Backward-compatible behavior for other modules
-        # no connection info -> keep for compatibility
-        if connected is None:
-            continue
-
-        if connected:
-            continue
-
-        # If module is disconnected but still sends actual values, keep them
-        # for discovery/device creation on non-channel modules.
-        has_any_value = any(
-            items.get(sensor_key) not in (None, "") for sensor_key in gated
-        )
-        if has_any_value:
+        if connected is True:
             continue
 
         for sensor_key in gated:

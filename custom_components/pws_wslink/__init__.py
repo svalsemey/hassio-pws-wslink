@@ -33,6 +33,7 @@ from .const import (
     WATER_LEAK_LIST,
     WSLINK_CONNECTION_KEY_BY_MODULE,
     WSLINK_PURGE_MODULES,
+    WSLINK_PURGED_MODULES,
     WSLINK_SENSOR_KEYS_BY_MODULE,
 )
 from .helpers import (
@@ -43,7 +44,6 @@ from .helpers import (
     remap_items_wslink,
     translated_notification,
     translations,
-    update_options,
 )
 from .routes import Routes, unregistered
 
@@ -152,10 +152,15 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
         self.config = config
         self.config_entry = config
 
-        # Safe cleanup state for channel modules
+        # Safe cleanup state for WSLink modules
         self._inactive_streak: dict[str, int] = {}
         self._inactive_since: dict[str, datetime] = {}
-        self._purged_modules: set[str] = set()
+        purged_raw = self.config_entry.options.get(WSLINK_PURGED_MODULES, [])
+        self._purged_modules: set[str] = {
+            module
+            for module in purged_raw
+            if isinstance(module, str) and module in WSLINK_PURGE_MODULES
+        }
 
         super().__init__(hass, _LOGGER, name=DOMAIN)
 
@@ -175,7 +180,7 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
         2) It remains inactive for at least the configured minimum duration
         (`cleanup_inactive_min_age_min`).
 
-        Only modules listed in `WSLINK_PURGE_MODULES` are evaluated (Type1 is excluded).
+        Only modules listed in `WSLINK_PURGE_MODULES` are evaluated.
         Once a module is confirmed inactive, it is emitted only once until it reconnects.
         When a module reconnects (`cn == 1`), its inactivity tracking state is reset.
         """
@@ -291,6 +296,7 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
         merged = list(dict.fromkeys([*loaded, *discovered]))
 
         if is_wslink:
+            purged_before = set(self._purged_modules)
             inactive_modules = self._newly_confirmed_inactive_modules(data)
 
             still_inactive_purged = {
@@ -306,9 +312,20 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                 discovered = [key for key in discovered if key not in inactive_keys]
                 merged = [key for key in merged if key not in inactive_keys]
 
+            options_changed = False
+            new_options = dict(self.config_entry.options)
+
             if merged != loaded:
-                await update_options(
-                    self.hass, self.config_entry, SENSORS_TO_LOAD, merged
+                new_options[SENSORS_TO_LOAD] = merged
+                options_changed = True
+
+            if self._purged_modules != purged_before:
+                new_options[WSLINK_PURGED_MODULES] = sorted(self._purged_modules)
+                options_changed = True
+
+            if options_changed:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, options=new_options
                 )
 
             if inactive_modules:
@@ -320,7 +337,11 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                     self.hass, self.config_entry, inactive_modules
                 )
         elif merged != loaded:
-            await update_options(self.hass, self.config_entry, SENSORS_TO_LOAD, merged)
+            new_options = dict(self.config_entry.options)
+            new_options[SENSORS_TO_LOAD] = merged
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, options=new_options
+            )
 
         self.async_set_updated_data(remaped_items)
 

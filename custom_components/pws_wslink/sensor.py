@@ -34,6 +34,7 @@ from .const import (
     WIND_AZIMUTH,
     WIND_DIR,
     WIND_SPEED,
+    WSLINK_PURGED_MODULES,
     UnitOfBat,
 )
 from .device_map import device_info_for_key, module_for_key
@@ -130,7 +131,18 @@ async def async_setup_entry(
     sensor_types = SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS
 
     loaded_keys = config_entry.options.get(SENSORS_TO_LOAD, [])
-    if isinstance(loaded_keys, list) and loaded_keys:
+    if is_wslink and isinstance(loaded_keys, list):
+        purged_raw = config_entry.options.get(WSLINK_PURGED_MODULES, [])
+        purged_modules = (
+            {m for m in purged_raw if isinstance(m, str)}
+            if isinstance(purged_raw, list)
+            else set()
+        )
+        if purged_modules:
+            loaded_keys = [
+                key for key in loaded_keys if module_for_key(key) not in purged_modules
+            ]
+
         requested = list(loaded_keys)
 
         if WIND_DIR in requested:

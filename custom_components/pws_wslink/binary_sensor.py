@@ -24,8 +24,9 @@ from .const import (
     SENSORS_TO_LOAD,
     WATER_LEAK,
     WATER_LEAK_LIST,
+    WSLINK_PURGED_MODULES,
 )
-from .device_map import device_info_for_key
+from .device_map import device_info_for_key, module_for_key
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,6 +124,17 @@ async def async_setup_entry(
     sensors_to_load = config_entry.options.get(SENSORS_TO_LOAD, [])
     if not isinstance(sensors_to_load, list):
         sensors_to_load = []
+
+    purged_raw = config_entry.options.get(WSLINK_PURGED_MODULES, [])
+    purged_modules = (
+        {m for m in purged_raw if isinstance(m, str)}
+        if isinstance(purged_raw, list)
+        else set()
+    )
+    if purged_modules:
+        sensors_to_load = [
+            key for key in sensors_to_load if module_for_key(key) not in purged_modules
+        ]
 
     entities = [
         WeatherBatteryBinarySensor(coordinator, description)

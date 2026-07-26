@@ -29,6 +29,7 @@ from .const import (
     INVALID_CREDENTIALS,
     SENSORS_TO_LOAD,
     URL_WSLINK_ADDON,
+    WSLINK_PURGED_MODULES,
 )
 from .helpers import ha_https_enabled
 
@@ -53,6 +54,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
         self.user_data_schema = {}
         self.sensors: dict[str, Any] = {}
         self.migrate_schema = {}
+        self.internal_options: dict[str, Any] = {}
         self._pending_user_input: dict[str, Any] | None = None
 
     async def _get_entry_data(self):
@@ -124,6 +126,14 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             )
         }
 
+        self.internal_options = {
+            WSLINK_PURGED_MODULES: (
+                entry_data.get(WSLINK_PURGED_MODULES)
+                if isinstance(entry_data.get(WSLINK_PURGED_MODULES), list)
+                else []
+            )
+        }
+
     async def async_step_init(self, user_input=None):
         """Manage options."""
         return await self.async_step_basic(user_input)
@@ -150,6 +160,8 @@ class ConfigOptionsFlowHandler(OptionsFlow):
         else:
             # Retain sensors
             user_input.update(self.sensors)
+            # Retain purged modules
+            user_input.update(self.internal_options)
 
             if not ha_https_enabled(self):
                 self._pending_user_input = user_input
