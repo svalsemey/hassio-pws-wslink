@@ -40,8 +40,10 @@ jobs:
           python-version: "3.14"
       - name: Install ruff
         run: pip install ruff
+      - name: Check ruff version
+        run: ruff --version
       - name: Run ruff
-        run: ruff check . --output-format=github
+        run: ruff check . --statistics --output-format=github
 
   json-validate:
     name: Validate translation JSON
