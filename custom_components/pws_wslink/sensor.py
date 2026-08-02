@@ -4,10 +4,11 @@ from datetime import datetime
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory, generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -28,23 +29,14 @@ from .const import (
     LIGHTNING_STRIKE_TIME,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
-    SENSORS_TO_LOAD,
     T6_WATER_LEAK_KEYS,
     T234_TEMP_KEYS,
     WIND_AZIMUTH,
     WIND_DIR,
     WIND_SPEED,
-    WSLINK_PURGED_MODULES,
-    UnitOfBat,
 )
-from .device_map import device_info_for_key, module_for_key
-from .helpers import (
-    battery_level_to_icon,
-    battery_level_to_text,
-    chill_index,
-    heat_index,
-    minutes_since_to_timestamp,
-)
+from .device_map import active_sensor_keys, device_info_for_key, module_for_key
+from .helpers import chill_index, heat_index, minutes_since_to_timestamp
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_pws import SENSOR_TYPES_PWS
 from .sensors_wslink import SENSOR_TYPES_WSLINK
@@ -72,11 +64,6 @@ class ChannelDiagnosticSensor(SensorEntity):
         self._device_key = device_key
         self._attr_unique_id = f"{module}_channel_number"
         self._attr_native_value = channel
-
-    @property
-    def suggested_entity_id(self) -> str:
-        """Return suggested entity id."""
-        return generate_entity_id("sensor.{}", f"{self._module}_channel_number")
 
     @property
     def device_info(self):
@@ -123,67 +110,51 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Weather Station sensors."""
-
     coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-
-    sensors: list[SensorEntity] = []
     is_wslink = config_entry.options.get(API_MODE) == API_MODE_WSLINK
-    sensor_types = SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS
+    loaded_keys = active_sensor_keys(config_entry)
 
-    loaded_keys = config_entry.options.get(SENSORS_TO_LOAD, [])
-    if is_wslink and isinstance(loaded_keys, list):
-        purged_raw = config_entry.options.get(WSLINK_PURGED_MODULES, [])
-        purged_modules = (
-            {m for m in purged_raw if isinstance(m, str)}
-            if isinstance(purged_raw, list)
-            else set()
-        )
-        if purged_modules:
-            loaded_keys = [
-                key for key in loaded_keys if module_for_key(key) not in purged_modules
-            ]
+    # Derived sensors are computed locally and never pushed by the station.
+    requested = set(loaded_keys)
+    if WIND_DIR in requested:
+        requested.add(WIND_AZIMUTH)
+    if not is_wslink:
+        if {OUTSIDE_TEMP, OUTSIDE_HUMIDITY} <= requested:
+            requested.add(HEAT_INDEX)
+        if {OUTSIDE_TEMP, WIND_SPEED} <= requested:
+            requested.add(CHILL_INDEX)
 
-        requested = list(loaded_keys)
-
-        if WIND_DIR in requested:
-            requested.append(WIND_AZIMUTH)
-        if (OUTSIDE_HUMIDITY in requested) and (OUTSIDE_TEMP in requested):
-            requested.append(HEAT_INDEX)
-        if (WIND_SPEED in requested) and (OUTSIDE_TEMP in requested):
-            requested.append(CHILL_INDEX)
-
-        sensors.extend(
-            WeatherSensor(hass, description, coordinator)
-            for description in sensor_types
-            if description.key in requested
-            and not (is_wslink and description.key in BATTERY_LIST)
-        )
-
-        # Add static diagnostic channel entities (Type2/3/4 and Type6 devices)
-        sensors.extend(_channel_diagnostic_entities(config_entry, loaded_keys))
-
-    if sensors:
-        async_add_entities(sensors)
+    async_add_entities(
+        [
+            *(
+                WeatherSensor(description, coordinator)
+                for description in (
+                    SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS
+                )
+                if description.key in requested
+                and not (is_wslink and description.key in BATTERY_LIST)
+            ),
+            *_channel_diagnostic_entities(config_entry, loaded_keys),
+        ]
+    )
 
 
-class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
-    RestoreEntity, CoordinatorEntity[WeatherDataUpdateCoordinator], SensorEntity
-):  # pyright: ignore[reportIncompatibleVariableOverride]
+class WeatherSensor(
+    CoordinatorEntity[WeatherDataUpdateCoordinator], RestoreEntity, SensorEntity
+):
     """Implementation of Weather Sensor entity."""
 
     _attr_has_entity_name = True
-    _attr_should_poll = False
+
+    entity_description: WeatherSensorEntityDescription
 
     def __init__(
         self,
-        hass: HomeAssistant,
         description: WeatherSensorEntityDescription,
         coordinator: WeatherDataUpdateCoordinator,
     ) -> None:
         """Initialize sensor."""
         super().__init__(coordinator)
-        self.hass = hass
-        self.coordinator = coordinator
         self.entity_description = description
         self._attr_unique_id = description.key
         self._data = None
@@ -222,22 +193,13 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
                     last_state.attributes.get("last_count_last_hour")
                 )
 
-        self.coordinator.async_add_listener(self._handle_coordinator_update)
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        data = (
-            self.coordinator.data if isinstance(self.coordinator.data, dict) else None
-        )
-        self._data = data.get(self.entity_description.key) if data is not None else None
-
-        # Mark bootstrap as completed once we receive first payload
-        if data is not None:
+        if (data := self.coordinator.data) is not None:
+            self._data = data.get(self.entity_description.key)
             self._has_seen_payload = True
-
         super()._handle_coordinator_update()
-        self.async_write_ha_state()
 
     @staticmethod
     def _to_int(value) -> int | None:
@@ -262,11 +224,12 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def _source_present_in_payload(self) -> bool:
         """Return True if current payload provides data needed by this entity."""
-        data = self.coordinator.data
-        if not isinstance(data, dict):
+        if (data := self.coordinator.data) is None:
             return False
 
-        is_wslink = self.coordinator.config.options.get(API_MODE) == API_MODE_WSLINK
+        is_wslink = (
+            self.coordinator.config_entry.options.get(API_MODE) == API_MODE_WSLINK
+        )
         key = self.entity_description.key
 
         if key == WIND_AZIMUTH:
@@ -398,86 +361,59 @@ class WeatherSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def _has_any_lightning_strike(self) -> bool:
         """Return True if at least one lightning counter is > 0."""
-        data = self.coordinator.data
-        if not isinstance(data, dict):
-            return False
-
-        for key in (
-            LIGHTNING_STRIKE_COUNT_LAST_HOUR,
-            LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
-            LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
-            LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
-            LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
-        ):
-            value = self._to_int(data.get(key))
-            if value is not None and value > 0:
-                return True
-
-        return False
+        data = self.coordinator.data or {}
+        return any(
+            (value := self._to_int(data.get(key))) is not None and value > 0
+            for key in (
+                LIGHTNING_STRIKE_COUNT_LAST_HOUR,
+                LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+                LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
+                LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
+                LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
+            )
+        )
 
     @property
-    def native_value(self):  # pyright: ignore[reportIncompatibleVariableOverride]
-        """Return value of entity."""
+    def native_value(self) -> StateType | datetime:
+        """Return the current value of the entity."""
         if not self.available:
             return None
 
-        _wslink = self.coordinator.config.options.get(API_MODE) == API_MODE_WSLINK
-        data = self.coordinator.data if isinstance(self.coordinator.data, dict) else {}
-
-        if self.entity_description.key == LIGHTNING_STRIKE_TIME:
+        key = self.entity_description.key
+        if key == LIGHTNING_STRIKE_TIME:
             return self._stable_lightning_last_strike()
-
-        if self.entity_description.key == LIGHTNING_DISTANCE:
+        if key == LIGHTNING_DISTANCE:
             return self._stable_lightning_distance()
 
-        if self.entity_description.key == WIND_AZIMUTH:
-            return self.entity_description.value_fn(data.get(WIND_DIR))  # pyright: ignore[ reportAttributeAccessIssue]
+        data = self.coordinator.data or {}
+        if key == WIND_AZIMUTH:
+            return self.entity_description.value_fn(data.get(WIND_DIR))
 
-        if self.entity_description.key == HEAT_INDEX and not _wslink:
-            return self.entity_description.value_fn(heat_index(data))  # pyright: ignore[ reportAttributeAccessIssue]
-
-        if self.entity_description.key == CHILL_INDEX and not _wslink:
-            return self.entity_description.value_fn(chill_index(data))  # pyright: ignore[ reportAttributeAccessIssue]
+        if self.coordinator.config_entry.options.get(API_MODE) != API_MODE_WSLINK:
+            if key == HEAT_INDEX:
+                return self.entity_description.value_fn(heat_index(data))
+            if key == CHILL_INDEX:
+                return self.entity_description.value_fn(chill_index(data))
 
         return (
             None if self._data == "" else self.entity_description.value_fn(self._data)
-        )  # pyright: ignore[ reportAttributeAccessIssue]
+        )
 
     @property
-    def extra_state_attributes(self) -> dict[str, int | str] | None:
-        """Persist helper attributes for lightning restoration."""
+    def extra_state_attributes(self) -> dict[str, int] | None:
+        """Expose the comparators used to restore the lightning state."""
         if self.entity_description.key not in (
             LIGHTNING_STRIKE_TIME,
             LIGHTNING_DISTANCE,
         ):
             return None
 
-        attrs: dict[str, int | float | str] = {}
-
+        attrs: dict[str, int] = {}
         if self._last_lightning_minutes is not None:
             attrs["last_minutes_since_strike"] = self._last_lightning_minutes
         if self._last_lightning_count_last_hour is not None:
             attrs["last_count_last_hour"] = self._last_lightning_count_last_hour
-
         return attrs or None
-
-    @property
-    def suggested_entity_id(self) -> str:
-        """Return name."""
-        return generate_entity_id("sensor.{}", self.entity_description.key)
-
-    @property
-    def icon(self) -> str | None:  # pyright: ignore[reportIncompatibleVariableOverride]
-        """Return the dynamic icon for battery representation."""
-
-        if self.entity_description.key in BATTERY_LIST:
-            if self.native_value is not None:
-                battery_level = battery_level_to_text(self.native_value)
-                return battery_level_to_icon(battery_level)
-
-            return battery_level_to_icon(UnitOfBat.UNKNOWN)
-
-        return self.entity_description.icon
 
     @property
     def device_info(self):

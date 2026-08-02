@@ -11,7 +11,6 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 
 from .const import (
@@ -36,14 +35,6 @@ from .helpers import ha_https_enabled
 CONFIRM_HTTPS = "confirm_https"
 
 
-class CannotConnect(HomeAssistantError):
-    """We can not connect. - not used in push mechanism."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Invalid auth exception."""
-
-
 class ConfigOptionsFlowHandler(OptionsFlow):
     """Handle WeatherStation ConfigFlow."""
 
@@ -53,7 +44,6 @@ class ConfigOptionsFlowHandler(OptionsFlow):
         self.user_data: dict[str, Any] = {}
         self.user_data_schema = {}
         self.sensors: dict[str, Any] = {}
-        self.migrate_schema = {}
         self.internal_options: dict[str, Any] = {}
         self._pending_user_input: dict[str, Any] | None = None
 
@@ -134,6 +124,26 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             )
         }
 
+    def _create_entry(self, user_input: dict[str, Any]) -> ConfigFlowResult:
+        """Store the options with the number selector values coerced to integers."""
+        return self.async_create_entry(
+            title="",
+            data={
+                **user_input,
+                CLEANUP_INACTIVE_STREAK: int(
+                    user_input.get(
+                        CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
+                    )
+                ),
+                CLEANUP_INACTIVE_MIN_AGE_MIN: int(
+                    user_input.get(
+                        CLEANUP_INACTIVE_MIN_AGE_MIN,
+                        DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
+                    )
+                ),
+            },
+        )
+
     async def async_step_init(self, user_input=None):
         """Manage options."""
         return await self.async_step_basic(user_input)
@@ -163,21 +173,11 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             # Retain purged modules
             user_input.update(self.internal_options)
 
-            if not ha_https_enabled(self):
+            if not ha_https_enabled(self.hass):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 
-            user_input[CLEANUP_INACTIVE_STREAK] = int(
-                user_input.get(CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK)
-            )
-            user_input[CLEANUP_INACTIVE_MIN_AGE_MIN] = int(
-                user_input.get(
-                    CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
-                )
-            )
-
-            # Do not rename config entry title during reconfiguration
-            return self.async_create_entry(title=DOMAIN, data=user_input)
+            return self._create_entry(user_input)
 
         self.user_data = user_input
 
@@ -196,22 +196,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                 if self._pending_user_input is None:
                     return self.async_abort(reason="unknown")
 
-                self._pending_user_input[CLEANUP_INACTIVE_STREAK] = int(
-                    self._pending_user_input.get(
-                        CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
-                    )
-                )
-                self._pending_user_input[CLEANUP_INACTIVE_MIN_AGE_MIN] = int(
-                    self._pending_user_input.get(
-                        CLEANUP_INACTIVE_MIN_AGE_MIN,
-                        DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
-                    )
-                )
-
-                # Do not rename config entry title during reconfiguration
-                return self.async_create_entry(
-                    title=DOMAIN, data=self._pending_user_input
-                )
+                return self._create_entry(self._pending_user_input)
 
             errors["base"] = "confirm_https"
 
@@ -279,7 +264,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         elif user_input[API_KEY] == user_input[API_ID]:
             errors["base"] = "valid_credentials_match"
         else:
-            if not ha_https_enabled(self):
+            if not ha_https_enabled(self.hass):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 

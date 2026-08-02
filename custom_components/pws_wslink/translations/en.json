@@ -6,6 +6,10 @@
             "valid_credentials_match": "API ID and API KEY should not be the same.",
             "confirm_https": "Please confirm before continuing."
         },
+        "abort": {
+            "already_configured": "The Weather Station is already configured.",
+            "unknown": "Unexpected error, please restart the configuration."
+        },
         "step": {
             "user": {
                 "description": "Provide API ID and API KEY so the Weather Station can access HomeAssistant",
@@ -39,6 +43,10 @@
             "valid_credentials_match": "API ID and API KEY should not be the same.",
             "confirm_https": "Please confirm before continuing."
         },
+        "abort": {
+            "already_configured": "The Weather Station is already configured.",
+            "unknown": "Unexpected error, please restart the configuration."
+        },
         "step": {
             "basic": {
                 "description": "Provide API ID and API KEY so the Weather Station can access Home Assistant",
@@ -58,18 +66,6 @@
                     "cleanup_inactive_streak": "Number of consecutive WSLink payloads where a module is disconnected/missing before cleanup can occur.",
                     "cleanup_inactive_min_age_min": "Minimum time (in minutes) a module must stay disconnected/missing before cleanup can occur.",
                     "dev_debug_checkbox": "Enable only if you want to send debugging data to the developer."
-                }
-            },
-            "migration": {
-                "title": "Statistic migration.",
-                "description": "For the correct functioning of long-term statistics, it is necessary to migrate the sensor unit in the long-term statistics. The original unit of long-term statistics for daily precipitation was in mm/d, however, the station only sends data in mm without time differentiation.\n\n The sensor to be migrated is for daily precipitation. If the correct value is already in the list for the daily precipitation sensor (mm), then the migration is already complete.\n\n Migration result for the sensor: {migration_status}, a total of {migration_count} rows converted.",
-                "data": {
-                    "sensor_to_migrate": "Sensor to migrate",
-                    "trigger_action": "Trigger migration"
-                },
-                "data_description": {
-                    "sensor_to_migrate": "Select the correct sensor for statistics migration.\nThe sensor values will be preserved, they will not be recalculated, only the unit in the long-term statistics will be changed.",
-                    "trigger_action": "Trigger the sensor statistics migration after checking."
                 }
             },
             "https_warning": {

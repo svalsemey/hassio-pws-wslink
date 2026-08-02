@@ -5,18 +5,19 @@ from typing import Final
 
 DOMAIN = "pws_wslink"
 MANUFACTURER = "PWS / WSLink"
+ROUTES_KEY: Final = "routes"
 URI_API_PWS = "/weatherstation/updateweatherstation.php"
 URI_API_WSLINK = "/data/upload.php"
 URL_WSLINK_ADDON: Final = "https://github.com/schizza/wslink-addon"
-DATABASE_PATH = "/config/home-assistant_v2.db"
-
-ICON = "mdi:weather"
 
 API_ID = "API_ID"
 API_KEY = "API_KEY"
+# Payload fields carrying the station credentials, per protocol.
+CREDENTIAL_FIELDS_PWS: Final = ("ID", "PASSWORD")
+CREDENTIAL_FIELDS_WSLINK: Final = ("wsid", "wspw")
+CREDENTIAL_FIELDS: Final = frozenset(CREDENTIAL_FIELDS_PWS + CREDENTIAL_FIELDS_WSLINK)
 
 SENSORS_TO_LOAD: Final = "sensors_to_load"
-SENSOR_TO_MIGRATE: Final = "sensor_to_migrate"
 
 API_MODE: Final = "api_mode"
 API_MODE_PWS: Final = "pws"
@@ -225,36 +226,6 @@ REMAP_ITEMS_WSLINK: dict[str, str] = {
     "t11cn": T11_CONNECTION,
 }
 
-DISABLED_BY_DEFAULT: Final = [
-    OUTSIDE_BATTERY,
-    WBGT_TEMP,
-    *T234_TEMP_KEYS,
-    *T234_HUMIDITY_KEYS,
-    *T234_BATTERY_KEYS,
-    LIGHTNING_STRIKE_TIME,
-    LIGHTNING_DISTANCE,
-    LIGHTNING_STRIKE_COUNT_LAST_HOUR,
-    LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
-    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
-    LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
-    LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
-    T5_BATTERY,
-    *T6_WATER_LEAK_KEYS,
-    *T6_BATTERY_KEYS,
-    PM25,
-    PM10,
-    PM25_AQI,
-    PM10_AQI,
-    T8_BATTERY,
-    HCHO,
-    VOC,
-    T9_BATTERY,
-    CO2,
-    T10_BATTERY,
-    CO,
-    T11_BATTERY,
-]
-
 BATTERY_LIST = [
     OUTSIDE_BATTERY,
     INDOOR_BATTERY,
@@ -457,19 +428,4 @@ AZIMUTH: list[UnitOfDir] = [
     UnitOfDir.NW,
     UnitOfDir.NNW,
     UnitOfDir.N,
-]
-
-
-class UnitOfBat(StrEnum):
-    """Battery level unit of measure."""
-
-    LOW = "low"
-    NORMAL = "normal"
-    UNKNOWN = "unknown"
-
-
-BATTERY_LEVEL: list[UnitOfBat] = [
-    UnitOfBat.LOW,
-    UnitOfBat.NORMAL,
-    UnitOfBat.UNKNOWN,
 ]

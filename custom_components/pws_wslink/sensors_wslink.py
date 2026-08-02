@@ -1,19 +1,19 @@
-"""Sensor entities for the Weather Station integration for old endpoint."""
+"""Sensor entities for the Weather Station WSLink endpoint."""
 
 from typing import cast
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_PARTS_PER_BILLION,
-    CONCENTRATION_PARTS_PER_MILLION,
     DEGREE,
     PERCENTAGE,
     UV_INDEX,
+    EntityCategory,
+    UnitOfDensity,
     UnitOfIrradiance,
     UnitOfLength,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
+    UnitOfRatio,
     UnitOfSpeed,
     UnitOfTemperature,
     UnitOfVolumetricFlux,
@@ -29,7 +29,6 @@ from .const import (
     FEELS_LIKE,
     HCHO,
     HEAT_INDEX,
-    HUMIDITY,
     INDOOR_HUMIDITY,
     INDOOR_TEMP,
     LIGHTNING_DISTANCE,
@@ -56,9 +55,6 @@ from .const import (
     T9_BATTERY,
     T10_BATTERY,
     T11_BATTERY,
-    T234_HUMIDITY_KEYS,
-    T234_TEMP_KEYS,
-    TEMPERATURE,
     UV,
     VOC,
     WBGT_TEMP,
@@ -75,51 +71,18 @@ from .helpers import (
     voc_level_to_text,
     wind_dir_to_text,
 )
-from .sensors_common import WeatherSensorEntityDescription
-
-
-def _temp_desc(key: str, unit: UnitOfTemperature) -> WeatherSensorEntityDescription:
-    return WeatherSensorEntityDescription(
-        key=key,
-        native_unit_of_measurement=unit,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        icon="mdi:thermometer",
-        translation_key=TEMPERATURE,
-        value_fn=lambda data: cast("float", data),
-    )
-
-
-def _humidity_desc(
-    key: str, icon: str = "mdi:water-percent"
-) -> WeatherSensorEntityDescription:
-    return WeatherSensorEntityDescription(
-        key=key,
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.HUMIDITY,
-        icon=icon,
-        translation_key=HUMIDITY,
-        value_fn=lambda data: cast("int", data),
-    )
-
-
-_CHANNELS_WSLINK = tuple(zip(T234_TEMP_KEYS, T234_HUMIDITY_KEYS, strict=False))
-
-
-def _channel_descriptions_wslink() -> tuple[WeatherSensorEntityDescription, ...]:
-    out: list[WeatherSensorEntityDescription] = []
-    for temp_key, hum_key in _CHANNELS_WSLINK:
-        out.append(_temp_desc(temp_key, UnitOfTemperature.CELSIUS))
-        out.append(_humidity_desc(hum_key))
-    return tuple(out)
-
+from .sensors_common import (
+    WeatherSensorEntityDescription,
+    channel_descriptions,
+    humidity_description,
+    temperature_description,
+)
 
 SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
-    _temp_desc(INDOOR_TEMP, UnitOfTemperature.CELSIUS),
-    _humidity_desc(INDOOR_HUMIDITY),
-    _temp_desc(OUTSIDE_TEMP, UnitOfTemperature.CELSIUS),
-    _humidity_desc(OUTSIDE_HUMIDITY, icon="mdi:cloud-percent"),
+    temperature_description(INDOOR_TEMP, UnitOfTemperature.CELSIUS),
+    humidity_description(INDOOR_HUMIDITY),
+    temperature_description(OUTSIDE_TEMP, UnitOfTemperature.CELSIUS),
+    humidity_description(OUTSIDE_HUMIDITY, icon="mdi:cloud-percent"),
     WeatherSensorEntityDescription(
         key=DEW_POINT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -135,7 +98,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:gauge",
         device_class=SensorDeviceClass.ATMOSPHERIC_PRESSURE,
-        suggested_unit_of_measurement=UnitOfPressure.HPA,
         translation_key=BARO_PRESSURE,
         value_fn=lambda data: cast("float", data),
     ),
@@ -144,17 +106,15 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfSpeed.METERS_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.WIND_SPEED,
-        suggested_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy",
         translation_key=WIND_SPEED,
-        value_fn=lambda data: cast("int", data),
+        value_fn=lambda data: cast("float", data),
     ),
     WeatherSensorEntityDescription(
         key=WIND_GUST,
         native_unit_of_measurement=UnitOfSpeed.METERS_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.WIND_SPEED,
-        suggested_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:windsock",
         translation_key=WIND_GUST,
         value_fn=lambda data: cast("float", data),
@@ -164,7 +124,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=DEGREE,
         state_class=SensorStateClass.MEASUREMENT_ANGLE,
         device_class=SensorDeviceClass.WIND_DIRECTION,
-        suggested_display_precision=None,
         icon="mdi:sign-direction",
         translation_key=WIND_DIR,
         value_fn=lambda data: cast("int", data),
@@ -182,7 +141,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolumetricFlux.MILLIMETERS_PER_HOUR,
         device_class=SensorDeviceClass.PRECIPITATION_INTENSITY,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfVolumetricFlux.MILLIMETERS_PER_HOUR,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAIN_RATE,
@@ -193,7 +151,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAINFALL_DAILY,
@@ -204,7 +161,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAINFALL_HOURLY,
@@ -215,7 +171,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAINFALL_WEEKLY,
@@ -226,7 +181,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAINFALL_MONTHLY,
@@ -237,7 +191,6 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         suggested_display_precision=2,
         icon="mdi:weather-pouring",
         translation_key=RAINFALL_YEARLY,
@@ -254,31 +207,28 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     ),
     WeatherSensorEntityDescription(
         key=UV,
-        name=UV,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UV_INDEX,
         icon="mdi:sunglasses",
         translation_key=UV,
         value_fn=lambda data: cast("float", data),
     ),
-    *_channel_descriptions_wslink(),
+    *channel_descriptions(UnitOfTemperature.CELSIUS),
     WeatherSensorEntityDescription(
         key=HEAT_INDEX,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
-        suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        suggested_display_precision=2,
+        suggested_display_precision=1,
         icon="mdi:thermometer",
         translation_key=HEAT_INDEX,
-        value_fn=lambda data: cast("int", data),
+        value_fn=lambda data: cast("float", data),
     ),
     WeatherSensorEntityDescription(
         key=FEELS_LIKE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
-        suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
         suggested_display_precision=1,
         icon="mdi:thermometer",
         translation_key=FEELS_LIKE,
@@ -289,11 +239,10 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
-        suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
         suggested_display_precision=1,
         icon="mdi:thermometer",
         translation_key=CHILL_INDEX,
-        value_fn=lambda data: cast("int", data),
+        value_fn=lambda data: cast("float", data),
     ),
     WeatherSensorEntityDescription(
         key=WBGT_TEMP,
@@ -303,7 +252,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         suggested_display_precision=1,
-        value_fn=lambda data: cast("int", data),
+        value_fn=lambda data: cast("float", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_TIME,
@@ -320,43 +269,48 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.DISTANCE,
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
         suggested_display_precision=0,
-        value_fn=lambda data: cast("int", data),
+        value_fn=lambda data: cast("float", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_COUNT_LAST_HOUR,
         translation_key=LIGHTNING_STRIKE_COUNT_LAST_HOUR,
         icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: cast("int", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
         translation_key=LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
         icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: cast("int", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
         translation_key=LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
         icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: cast("int", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
         translation_key=LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
         icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: cast("int", data),
     ),
     WeatherSensorEntityDescription(
         key=LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
         translation_key=LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
         icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: cast("int", data),
     ),
     WeatherSensorEntityDescription(
         key=PM25,
         translation_key=PM25,
         device_class=SensorDeviceClass.PM25,
-        native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        native_unit_of_measurement=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=lambda data: cast("int", data),
@@ -365,7 +319,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         key=PM10,
         translation_key=PM10,
         device_class=SensorDeviceClass.PM10,
-        native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        native_unit_of_measurement=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=lambda data: cast("int", data),
@@ -389,6 +343,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(
         key=T8_BATTERY,
         translation_key=BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -399,7 +354,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         key=HCHO,
         translation_key=HCHO,
         device_class=SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_BILLION,
+        native_unit_of_measurement=UnitOfRatio.PARTS_PER_BILLION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=lambda data: cast("int", data),
@@ -415,6 +370,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(
         key=T9_BATTERY,
         translation_key=BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -425,7 +381,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         key=CO2,
         translation_key=CO2,
         device_class=SensorDeviceClass.CO2,
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+        native_unit_of_measurement=UnitOfRatio.PARTS_PER_MILLION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule-co2",
         value_fn=lambda data: cast("int", data),
@@ -433,6 +389,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(
         key=T10_BATTERY,
         translation_key=BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -443,7 +400,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
         key=CO,
         translation_key=CO,
         device_class=SensorDeviceClass.CO,
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+        native_unit_of_measurement=UnitOfRatio.PARTS_PER_MILLION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule-co",
         value_fn=lambda data: cast("int", data),
@@ -451,6 +408,7 @@ SENSOR_TYPES_WSLINK: tuple[WeatherSensorEntityDescription, ...] = (
     WeatherSensorEntityDescription(
         key=T11_BATTERY,
         translation_key=BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,

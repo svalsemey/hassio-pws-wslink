@@ -1,12 +1,14 @@
 """Device mapping helpers for hub/module topology."""
 
 import re
+from typing import Final
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.device_registry import DeviceEntryType
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
 from .const import (
+    API_MODE,
+    API_MODE_WSLINK,
     BARO_PRESSURE,
     CO,
     CO2,
@@ -27,12 +29,14 @@ from .const import (
     PM10_AQI,
     PM25,
     PM25_AQI,
+    SENSORS_TO_LOAD,
     T5_BATTERY,
     T8_BATTERY,
     T9_BATTERY,
     T10_BATTERY,
     T11_BATTERY,
     VOC,
+    WSLINK_PURGED_MODULES,
 )
 
 _TYPE234_CHANNEL_RE = re.compile(r"^ch([1-7])_")
@@ -77,54 +81,48 @@ def module_for_key(key: str) -> str:
     return "type1"
 
 
-def _device_model_for_module(module: str) -> str:
-    """Return model string shown in HA device page."""
-    if module == "hub":
-        return "Base station"
-    if module.startswith("t234c"):
-        return "Type 2/3/4"
-    if module == "type5":
-        return "Type 5"
-    if module.startswith("t6c"):
-        return "Type 6"
-    if module == "type8":
-        return "Type 8"
-    if module == "type9":
-        return "Type 9"
-    if module == "type10":
-        return "Type 10"
-    if module == "type11":
-        return "Type 11"
-    return "Type 1"
+def active_sensor_keys(config_entry: ConfigEntry) -> list[str]:
+    """Return the discovered sensor keys, excluding purged WSLink modules."""
+    keys: list[str] = config_entry.options.get(SENSORS_TO_LOAD) or []
+    if config_entry.options.get(API_MODE) != API_MODE_WSLINK:
+        return keys
+
+    purged = set(config_entry.options.get(WSLINK_PURGED_MODULES) or ())
+    return [key for key in keys if module_for_key(key) not in purged]
 
 
-def _device_translation_for_module(module: str) -> tuple[str, dict[str, str] | None]:
-    """Return strings.json device translation key + placeholders."""
-    if module == "hub":
-        return "hub", None
-    if module.startswith("t234c"):
-        return "type234", {"channel": module[5:]}
-    if module == "type5":
-        return "type5", None
-    if module.startswith("t6c"):
-        return "type6", {"channel": module[3:]}
-    if module == "type8":
-        return "type8", None
-    if module == "type9":
-        return "type9", None
-    if module == "type10":
-        return "type10", None
-    if module == "type11":
-        return "type11", None
-    return "type1", None
+# Fixed modules: module id -> (device model, strings.json translation key).
+_MODULE_METADATA: Final[dict[str, tuple[str, str]]] = {
+    "hub": ("Base station", "hub"),
+    "type1": ("Type 1", "type1"),
+    "type5": ("Type 5", "type5"),
+    "type8": ("Type 8", "type8"),
+    "type9": ("Type 9", "type9"),
+    "type10": ("Type 10", "type10"),
+    "type11": ("Type 11", "type11"),
+}
+
+# Channel modules: id prefix -> (device model, strings.json translation key).
+_CHANNEL_METADATA: Final[tuple[tuple[str, str, str], ...]] = (
+    ("t234c", "Type 2/3/4", "type234"),
+    ("t6c", "Type 6", "type6"),
+)
+
+
+def _module_metadata(module: str) -> tuple[str, str, dict[str, str] | None]:
+    """Return the model, translation key and placeholders of one module."""
+    for prefix, model, translation_key in _CHANNEL_METADATA:
+        if module.startswith(prefix):
+            return model, translation_key, {"channel": module.removeprefix(prefix)}
+
+    return (*_MODULE_METADATA.get(module, _MODULE_METADATA["type1"]), None)
 
 
 def device_info_for_key(config_entry: ConfigEntry, key: str) -> DeviceInfo:
     """Build DeviceInfo and localize device labels via strings.json only."""
     module = module_for_key(key)
+    model, translation_key, placeholders = _module_metadata(module)
     hub_identifier = (DOMAIN, f"{config_entry.entry_id}_hub")
-    translation_key, placeholders = _device_translation_for_module(module)
-    model = _device_model_for_module(module)
 
     if module == "hub":
         return DeviceInfo(
@@ -136,9 +134,8 @@ def device_info_for_key(config_entry: ConfigEntry, key: str) -> DeviceInfo:
             translation_placeholders=placeholders,
         )
 
-    module_identifier = (DOMAIN, f"{config_entry.entry_id}_{module}")
     return DeviceInfo(
-        identifiers={module_identifier},
+        identifiers={(DOMAIN, f"{config_entry.entry_id}_{module}")},
         via_device=hub_identifier,
         manufacturer=MANUFACTURER,
         model=model,

@@ -1,7 +1,9 @@
 """Weather Station integration."""
 
 from datetime import datetime, timedelta
+from hmac import compare_digest
 import logging
+from typing import Any
 
 import aiohttp.web
 from aiohttp.web_exceptions import HTTPUnauthorized
@@ -9,7 +11,7 @@ from aiohttp.web_exceptions import HTTPUnauthorized
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import InvalidStateError, PlatformNotReady
+from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -23,10 +25,13 @@ from .const import (
     BATTERY_NON_BINARY,
     CLEANUP_INACTIVE_MIN_AGE_MIN,
     CLEANUP_INACTIVE_STREAK,
+    CREDENTIAL_FIELDS_PWS,
+    CREDENTIAL_FIELDS_WSLINK,
     DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
     DEFAULT_CLEANUP_INACTIVE_STREAK,
     DEV_DBG,
     DOMAIN,
+    ROUTES_KEY,
     SENSORS_TO_LOAD,
     URI_API_PWS,
     URI_API_WSLINK,
@@ -45,14 +50,10 @@ from .helpers import (
     translated_notification,
     translations,
 )
-from .routes import Routes, unregistered
+from .routes import Routes
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
-
-
-class IncorrectDataError(InvalidStateError):
-    """Invalid exception."""
 
 
 def _parse_connected(value) -> bool | None:
@@ -65,16 +66,11 @@ def _parse_connected(value) -> bool | None:
         return None
 
 
-def _sensor_keys_for_module(module: str) -> set[str]:
-    """Return all sensor keys belonging to one WSLink module."""
-    return set(WSLINK_SENSOR_KEYS_BY_MODULE.get(module, ()))
-
-
 def _sensor_keys_for_modules(modules: set[str]) -> set[str]:
     """Return flattened sensor keys for multiple WSLink modules."""
     keys: set[str] = set()
     for module in modules:
-        keys.update(_sensor_keys_for_module(module))
+        keys.update(set(WSLINK_SENSOR_KEYS_BY_MODULE.get(module, ())))
     return keys
 
 
@@ -143,26 +139,21 @@ def _notification_translation_candidates(sensor_key: str) -> list[str]:
     return candidates
 
 
-class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
+class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetched data."""
 
-    def __init__(self, hass: HomeAssistant, config: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Init global updater."""
-        self.hass = hass
-        self.config = config
-        self.config_entry = config
+        super().__init__(hass, _LOGGER, config_entry=config_entry, name=DOMAIN)
 
         # Safe cleanup state for WSLink modules
         self._inactive_streak: dict[str, int] = {}
         self._inactive_since: dict[str, datetime] = {}
-        purged_raw = self.config_entry.options.get(WSLINK_PURGED_MODULES, [])
         self._purged_modules: set[str] = {
             module
-            for module in purged_raw
-            if isinstance(module, str) and module in WSLINK_PURGE_MODULES
+            for module in config_entry.options.get(WSLINK_PURGED_MODULES, [])
+            if module in WSLINK_PURGE_MODULES
         }
-
-        super().__init__(hass, _LOGGER, name=DOMAIN)
 
     def _module_connected_from_raw(self, raw_data: dict, module: str) -> bool | None:
         """Return connection status for one WSLink module from raw payload."""
@@ -234,40 +225,42 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
             minutes = DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
         return timedelta(minutes=minutes)
 
-    async def received_data(self, webdata: aiohttp.web.Request):
+    def _credentials_match(self, station_id: str, station_key: str) -> bool:
+        """Compare station credentials using constant-time comparison.
+
+        Both comparisons are always evaluated (bitwise `&` instead of `and`)
+        so that no timing information about the station id leaks.
+        """
+        options = self.config_entry.options
+        return bool(
+            compare_digest(
+                str(station_id).encode(), str(options.get(API_ID) or "").encode()
+            )
+            & compare_digest(
+                str(station_key).encode(), str(options.get(API_KEY) or "").encode()
+            )
+        )
+
+    async def received_data(self, webdata: aiohttp.web.Request) -> aiohttp.web.Response:
         """Handle incoming data query."""
         is_wslink = self.config_entry.options.get(API_MODE) == API_MODE_WSLINK
-        get_data = webdata.query
-        post_data = await webdata.post()
+        data = dict(webdata.query) | dict(await webdata.post())
+        id_field, key_field = (
+            CREDENTIAL_FIELDS_WSLINK if is_wslink else CREDENTIAL_FIELDS_PWS
+        )
 
-        data = dict(get_data) | dict(post_data)
-
-        if not is_wslink and ("ID" not in data or "PASSWORD" not in data):
+        if id_field not in data or key_field not in data:
             _LOGGER.error("Invalid request. No security data provided!")
             raise HTTPUnauthorized
 
-        if is_wslink and ("wsid" not in data or "wspw" not in data):
-            _LOGGER.error("Invalid request. No security data provided!")
-            raise HTTPUnauthorized
-
-        if is_wslink:
-            id_data = data["wsid"]
-            key_data = data["wspw"]
-        else:
-            id_data = data["ID"]
-            key_data = data["PASSWORD"]
-
-        _id = self.config_entry.options.get(API_ID)
-        _key = self.config_entry.options.get(API_KEY)
-
-        if id_data != _id or key_data != _key:
-            _LOGGER.error("Unauthorised access!")
+        if not self._credentials_match(data[id_field], data[key_field]):
+            _LOGGER.error("Unauthorised access on %s", webdata.path)
             raise HTTPUnauthorized
 
         remaped_items = remap_items_wslink(data) if is_wslink else remap_items_pws(data)
 
         loaded = loaded_sensors(self.config_entry) or []
-        discovered = check_disabled(self.hass, remaped_items, self.config) or []
+        discovered = check_disabled(remaped_items, self.config_entry) or []
 
         if discovered:
             translated_names: list[str] = []
@@ -275,11 +268,7 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
                 resolved_name = ""
                 for tr_key in _notification_translation_candidates(t_key):
                     resolved_name = await translations(
-                        self.hass,
-                        DOMAIN,
-                        tr_key,
-                        key="name",
-                        category="entity",
+                        self.hass, DOMAIN, tr_key, "entity", key="name"
                     )
                     if resolved_name:
                         break
@@ -351,126 +340,21 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator):
         return aiohttp.web.Response(body="OK", status=200)
 
 
-def register_path(
-    hass: HomeAssistant,
-    url_path: str,
-    coordinator: WeatherDataUpdateCoordinator,
-    config: ConfigEntry,
-):
-    """Register path to handle incoming data."""
-
+def _async_routes(hass: HomeAssistant) -> Routes:
+    """Return the shared route registry, registering the HTTP views once."""
     hass_data = hass.data.setdefault(DOMAIN, {})
-    debug = config.options.get(DEV_DBG)
-    is_wslink = config.options.get(API_MODE) == API_MODE_WSLINK
 
-    routes: Routes = hass_data.get("routes", Routes())
-
-    if not routes.routes:
+    if (routes := hass_data.get(ROUTES_KEY)) is None:
         routes = Routes()
-        _LOGGER.info("Routes not found, creating new routes")
-
-        if debug:
-            _LOGGER.debug("Enabled route is: %s, WSLink is %s", url_path, is_wslink)
-
         try:
-            default_route = hass.http.app.router.add_get(
-                URI_API_PWS,
-                routes.make_dispatcher("GET", URI_API_PWS),
-                name="weather_default_url",
-            )
-            if debug:
-                _LOGGER.debug("Default route: %s", default_route)
-
-            wslink_route = hass.http.app.router.add_get(
-                URI_API_WSLINK,
-                routes.make_dispatcher("GET", URI_API_WSLINK),
-                name="weather_wslink_url",
-            )
-            if debug:
-                _LOGGER.debug("WSLink route: %s", wslink_route)
-
-            wslink_post_route = hass.http.app.router.add_post(
-                URI_API_WSLINK,
-                routes.make_dispatcher("POST", URI_API_WSLINK),
-                name="weather_wslink_post_route_url",
-            )
-            if debug:
-                _LOGGER.debug("WSLink route: %s", wslink_post_route)
-
-            routes.add_route(
-                URI_API_PWS,
-                default_route,
-                coordinator.received_data if not is_wslink else unregistered,
-                not is_wslink,
-            )
-            routes.add_route(
-                URI_API_WSLINK,
-                wslink_route,
-                coordinator.received_data if is_wslink else unregistered,
-                is_wslink,
-            )
-            routes.add_route(
-                URI_API_WSLINK,
-                wslink_post_route,
-                coordinator.received_data if is_wslink else unregistered,
-                is_wslink,
-            )
-
-            hass_data["routes"] = routes
-
-        except RuntimeError as Ex:
-            if (
-                "Added route will never be executed, method GET is already registered"
-                in Ex.args
-            ):
-                _LOGGER.info("Handler to URL (%s) already registred", url_path)
-                return False
-
-            _LOGGER.error("Unable to register URL handler! (%s)", Ex.args)
-            return False
-
-        _LOGGER.info(
-            "Registered path to handle weather data: %s",
-            routes.get_enabled(),  # pylint: disable=used-before-assignment
-        )
-
-    if is_wslink:
-        routes.switch_route(coordinator.received_data, URI_API_WSLINK)
-    else:
-        routes.switch_route(coordinator.received_data, URI_API_PWS)
+            routes.async_register_views(hass)
+        except RuntimeError as err:
+            raise PlatformNotReady(
+                f"Unable to register the Weather Station HTTP views: {err}"
+            ) from err
+        hass_data[ROUTES_KEY] = routes
 
     return routes
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up the config entry for my device."""
-
-    coordinator = WeatherDataUpdateCoordinator(hass, entry)
-
-    hass_data = hass.data.setdefault(DOMAIN, {})
-    hass_data[entry.entry_id] = coordinator
-
-    is_wslink = entry.options.get(API_MODE) == API_MODE_WSLINK
-    debug = entry.options.get(DEV_DBG)
-
-    if debug:
-        _LOGGER.debug("WS Link is %s", "enabled" if is_wslink else "disabled")
-
-    route = register_path(
-        hass, URI_API_PWS if not is_wslink else URI_API_WSLINK, coordinator, entry
-    )
-
-    if not route:
-        _LOGGER.error("Fatal: path not registered!")
-        raise PlatformNotReady
-
-    hass_data["route"] = route
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    entry.async_on_unload(entry.add_update_listener(update_listener))
-
-    return True
 
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
@@ -481,11 +365,31 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
     _LOGGER.info("Settings updated")
 
 
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up the config entry for the weather station."""
+    coordinator = WeatherDataUpdateCoordinator(hass, entry)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    _async_routes(hass).switch_route(
+        coordinator.received_data,
+        URI_API_WSLINK
+        if entry.options.get(API_MODE) == API_MODE_WSLINK
+        else URI_API_PWS,
+    )
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
 
-    _ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if _ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+    hass.data[DOMAIN].pop(entry.entry_id, None)
+    if (routes := hass.data[DOMAIN].get(ROUTES_KEY)) is not None:
+        routes.release()
 
-    return _ok
+    return True

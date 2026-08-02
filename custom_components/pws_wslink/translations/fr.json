@@ -6,6 +6,10 @@
             "valid_credentials_match": "L’identifiant API et la clé API ne doivent pas être identiques.",
             "confirm_https": "Veuillez confirmer pour continuer."
         },
+        "abort": {
+            "already_configured": "La station météo est déjà configurée.",
+            "unknown": "Erreur inattendue, veuillez redémarrer la configuration."
+        },
         "step": {
             "user": {
                 "description": "Saisissez l’identifiant API et la clé API afin que la station météo puisse accéder à Home Assistant.",
@@ -39,6 +43,10 @@
             "valid_credentials_match": "L’identifiant API et la clé API ne doivent pas être identiques.",
             "confirm_https": "Veuillez confirmer pour continuer."
         },
+        "abort": {
+            "already_configured": "La station météo est déjà configurée.",
+            "unknown": "Erreur inattendue, veuillez redémarrer la configuration."
+        },
         "step": {
             "basic": {
                 "description": "Saisissez l’identifiant API et la clé API afin que la station météo puisse accéder à Home Assistant.",
@@ -58,18 +66,6 @@
                     "cleanup_inactive_streak": "Nombre d’échantillons consécutifs WSLink où un module est déconnecté/manquant avant que le nettoyage puisse se produire.",
                     "cleanup_inactive_min_age_min": "Temps minimum (en minutes) pendant lequel un module doit rester déconnecté/manquant avant que le nettoyage puisse se produire.",
                     "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur."
-                }
-            },
-            "migration": {
-                "title": "Migration des statistiques",
-                "description": "Pour le bon fonctionnement des statistiques à long terme, il est nécessaire de migrer l’unité du capteur dans les statistiques à long terme. L’unité d’origine des statistiques à long terme pour les précipitations quotidiennes était mm/d, mais la station envoie uniquement des données en mm, sans différenciation temporelle.\n\nLe capteur à migrer concerne les précipitations quotidiennes. Si la bonne unité est déjà présente pour le capteur de précipitations quotidiennes (mm), la migration est déjà terminée.\n\nRésultat de migration pour le capteur : {migration_status}, avec un total de {migration_count} lignes converties.",
-                "data": {
-                    "sensor_to_migrate": "Capteur à migrer",
-                    "trigger_action": "Déclencher la migration"
-                },
-                "data_description": {
-                    "sensor_to_migrate": "Sélectionnez le capteur correct pour la migration des statistiques.\nLes valeurs du capteur seront conservées (pas de recalcul), seule l’unité dans les statistiques à long terme sera modifiée.",
-                    "trigger_action": "Déclenchez la migration des statistiques du capteur après vérification."
                 }
             },
             "https_warning": {
