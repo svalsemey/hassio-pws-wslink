@@ -227,11 +227,11 @@
         }
     },
     "exceptions": {
-        "new_sensors_title": {
-            "message": "Nouveaux capteurs détectés pour la station météo"
+        "new_modules_title": {
+            "message": "Nouveaux modules de la station météo détectés"
         },
-        "new_sensors": {
-            "message": "{added_sensors}"
+        "new_modules": {
+            "message": "Les modules suivants ont été détectés et ajoutés :\n\n{modules}"
         }
     }
 }

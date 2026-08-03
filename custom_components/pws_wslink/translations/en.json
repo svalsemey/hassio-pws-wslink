@@ -227,11 +227,11 @@
         }
     },
     "exceptions": {
-        "new_sensors_title": {
-            "message": "New sensors found for Weather Station"
+        "new_modules_title": {
+            "message": "New Weather Station modules detected"
         },
-        "new_sensors": {
-            "message": "{added_sensors}"
+        "new_modules": {
+            "message": "The following modules were detected and added:\n\n{modules}"
         }
     }
 }

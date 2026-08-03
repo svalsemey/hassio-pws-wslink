@@ -1,4 +1,4 @@
-"""Device mapping helpers for hub/module topology."""
+"""Map weather station modules to Home Assistant devices."""
 
 import re
 from typing import Final
@@ -109,8 +109,8 @@ _CHANNEL_METADATA: Final[tuple[tuple[str, str, str], ...]] = (
 )
 
 
-def _module_metadata(module: str) -> tuple[str, str, dict[str, str] | None]:
-    """Return the model, translation key and placeholders of one module."""
+def module_metadata(module: str) -> tuple[str, str, dict[str, str] | None]:
+    """Return the device model, translation key and placeholders of one module."""
     for prefix, model, translation_key in _CHANNEL_METADATA:
         if module.startswith(prefix):
             return model, translation_key, {"channel": module.removeprefix(prefix)}
@@ -118,10 +118,17 @@ def _module_metadata(module: str) -> tuple[str, str, dict[str, str] | None]:
     return (*_MODULE_METADATA.get(module, _MODULE_METADATA["type1"]), None)
 
 
-def device_info_for_key(config_entry: ConfigEntry, key: str) -> DeviceInfo:
-    """Build DeviceInfo and localize device labels via strings.json only."""
-    module = module_for_key(key)
-    model, translation_key, placeholders = _module_metadata(module)
+def channel_of_module(module: str) -> int | None:
+    """Return the channel number of a channel module, None for single modules."""
+    for prefix, _model, _translation_key in _CHANNEL_METADATA:
+        if module.startswith(prefix):
+            return int(module.removeprefix(prefix))
+    return None
+
+
+def device_info_for_module(config_entry: ConfigEntry, module: str) -> DeviceInfo:
+    """Build the DeviceInfo representing one station module."""
+    model, translation_key, placeholders = module_metadata(module)
     hub_identifier = (DOMAIN, f"{config_entry.entry_id}_hub")
 
     if module == "hub":
@@ -142,3 +149,8 @@ def device_info_for_key(config_entry: ConfigEntry, key: str) -> DeviceInfo:
         translation_key=translation_key,
         translation_placeholders=placeholders,
     )
+
+
+def device_info_for_key(config_entry: ConfigEntry, key: str) -> DeviceInfo:
+    """Build the DeviceInfo of the module owning one sensor key."""
+    return device_info_for_module(config_entry, module_for_key(key))

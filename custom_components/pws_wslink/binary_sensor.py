@@ -162,7 +162,7 @@ class WeatherBinarySensor(
 
     @property
     def device_info(self):
-        """Attach binary sensor to hub or corresponding module device."""
+        """Attach the entity to the device of its module."""
         return device_info_for_key(
             self.coordinator.config_entry, self.entity_description.key
         )

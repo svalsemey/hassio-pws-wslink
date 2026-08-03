@@ -30,13 +30,17 @@ from .const import (
     LIGHTNING_STRIKE_TIME,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
-    T6_WATER_LEAK_KEYS,
-    T234_TEMP_KEYS,
     WIND_AZIMUTH,
     WIND_DIR,
     WIND_SPEED,
 )
-from .device_map import active_sensor_keys, device_info_for_key, module_for_key
+from .device_map import (
+    active_sensor_keys,
+    channel_of_module,
+    device_info_for_key,
+    device_info_for_module,
+    module_for_key,
+)
 from .helpers import (
     chill_index,
     heat_index,
@@ -49,7 +53,7 @@ from .sensors_wslink import SENSOR_TYPES_WSLINK
 
 
 class ChannelDiagnosticSensor(SensorEntity):
-    """Static diagnostic sensor exposing channel number for channel-based modules."""
+    """Static diagnostic sensor exposing the channel number of a channel module."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -62,51 +66,33 @@ class ChannelDiagnosticSensor(SensorEntity):
         config_entry: ConfigEntry,
         module: str,
         channel: int,
-        device_key: str,
     ) -> None:
-        """Initialize diagnostic channel sensor."""
+        """Initialize the channel number sensor of one module."""
         self._config_entry = config_entry
         self._module = module
-        self._device_key = device_key
         self._attr_unique_id = f"{module}_channel_number"
         self._attr_native_value = channel
 
     @property
     def device_info(self):
-        """Attach diagnostic sensor to the corresponding module device."""
-        return device_info_for_key(self._config_entry, self._device_key)
+        """Attach the sensor to the device of its module."""
+        return device_info_for_module(self._config_entry, self._module)
 
 
 def _channel_diagnostic_entities(
     config_entry: ConfigEntry,
     loaded_keys: list[str],
 ) -> list[ChannelDiagnosticSensor]:
-    """Build one diagnostic 'channel number' sensor per channel-based device."""
-    modules: dict[str, tuple[int, str]] = {}
-
+    """Build one diagnostic 'channel number' sensor per channel module."""
+    channels: dict[str, int] = {}
     for key in loaded_keys:
         module = module_for_key(key)
-
-        if module.startswith("t234c"):
-            ch_txt = module[5:]
-            if ch_txt.isdigit():
-                ch = int(ch_txt)
-                if 1 <= ch <= 7:
-                    modules.setdefault(module, (ch, T234_TEMP_KEYS[ch - 1]))
-            continue
-
-        if module.startswith("t6c"):
-            ch_txt = module[3:]
-            if ch_txt.isdigit():
-                ch = int(ch_txt)
-                if 1 <= ch <= 7:
-                    modules.setdefault(module, (ch, T6_WATER_LEAK_KEYS[ch - 1]))
+        if (channel := channel_of_module(module)) is not None:
+            channels[module] = channel
 
     return [
-        ChannelDiagnosticSensor(config_entry, module, channel, device_key)
-        for module, (channel, device_key) in sorted(
-            modules.items(), key=lambda item: item[1][0]
-        )
+        ChannelDiagnosticSensor(config_entry, module, channel)
+        for module, channel in sorted(channels.items(), key=lambda item: item[1])
     ]
 
 
@@ -448,7 +434,7 @@ class WeatherSensor(
 
     @property
     def device_info(self):
-        """Attach entity to hub or corresponding module device."""
+        """Attach the entity to the device of its module."""
         return device_info_for_key(
             self.coordinator.config_entry, self.entity_description.key
         )

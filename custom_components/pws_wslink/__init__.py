@@ -22,8 +22,6 @@ from .const import (
     API_KEY,
     API_MODE,
     API_MODE_WSLINK,
-    BATTERY_LIST,
-    BATTERY_NON_BINARY,
     CLEANUP_INACTIVE_MIN_AGE_MIN,
     CLEANUP_INACTIVE_STREAK,
     CREDENTIAL_FIELDS_PWS,
@@ -37,12 +35,12 @@ from .const import (
     SENSORS_TO_LOAD,
     URI_API_PWS,
     URI_API_WSLINK,
-    WATER_LEAK_LIST,
     WSLINK_CONNECTION_KEY_BY_MODULE,
     WSLINK_PURGE_MODULES,
     WSLINK_PURGED_MODULES,
     WSLINK_SENSOR_KEYS_BY_MODULE,
 )
+from .device_map import channel_of_module, module_for_key, module_metadata
 from .helpers import (
     anonymize,
     check_disabled,
@@ -92,11 +90,12 @@ async def _async_remove_stale_wslink_entities_and_devices(
     target_unique_ids = set(sensor_keys)
     target_unique_ids.update(f"{key}_binary" for key in sensor_keys)
 
-    # Channel diagnostic entities only exist for Type234 / Type6 modules.
-    channel_modules = {
-        module for module in inactive_modules if module.startswith(("t234c", "t6c"))
-    }
-    target_unique_ids.update(f"{module}_channel_number" for module in channel_modules)
+    # Channel diagnostic entities only exist for channel modules.
+    target_unique_ids.update(
+        f"{module}_channel_number"
+        for module in inactive_modules
+        if channel_of_module(module) is not None
+    )
 
     for entity_id, reg_entry in list(ent_reg.entities.items()):
         if reg_entry.config_entry_id != entry.entry_id:
@@ -118,28 +117,6 @@ async def _async_remove_stale_wslink_entities_and_devices(
             continue
 
         dev_reg.async_remove_device(device.id)
-
-
-def _notification_translation_candidates(sensor_key: str) -> list[str]:
-    """Return ordered translation candidates for 'new sensors' notifications.
-
-    Order:
-    1) Specific key (backward-compatible): sensor.<sensor_key>
-    2) Generic key fallback based on sensor family
-    """
-    candidates = [f"sensor.{sensor_key}"]
-
-    if sensor_key in BATTERY_LIST or sensor_key in BATTERY_NON_BINARY:
-        # Prefer binary sensor generic wording for batteries; fallback to sensor generic.
-        candidates.extend(["binary_sensor.battery", "sensor.battery"])
-    elif sensor_key in WATER_LEAK_LIST:
-        candidates.append("binary_sensor.water_leak")
-    elif sensor_key.endswith("_temp"):
-        candidates.append("sensor.temperature")
-    elif sensor_key.endswith("_humidity"):
-        candidates.append("sensor.humidity")
-
-    return candidates
 
 
 class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -255,6 +232,38 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         )
 
+    async def _async_notify_new_modules(
+        self, new_keys: set[str], known_keys: list[str]
+    ) -> None:
+        """Notify the user about the station modules revealed by new sensor keys.
+
+        Modules are named with the device labels of strings.json, so the
+        notification matches what the device page shows.
+        """
+        new_modules = {module_for_key(key) for key in new_keys} - {
+            module_for_key(key) for key in known_keys
+        }
+        if not new_modules:
+            return
+
+        labels: list[str] = []
+        for module in new_modules:
+            _, translation_key, placeholders = module_metadata(module)
+            label = await translations(
+                self.hass, DOMAIN, translation_key, "device", key="name"
+            )
+            if label and placeholders:
+                label = label.format(**placeholders)
+            labels.append(label or module)
+
+        await translated_notification(
+            self.hass,
+            DOMAIN,
+            "new_modules",
+            {"modules": "\n".join(sorted(labels))},
+            f"{DOMAIN}_new_modules_{self.config_entry.entry_id}",
+        )
+
     async def received_data(self, webdata: aiohttp.web.Request) -> aiohttp.web.Response:
         """Handle incoming data query."""
         is_wslink = self.config_entry.options.get(API_MODE) == API_MODE_WSLINK
@@ -275,27 +284,6 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         loaded = loaded_sensors(self.config_entry) or []
         discovered = check_disabled(remaped_items, self.config_entry) or []
-
-        if discovered:
-            translated_names: list[str] = []
-            for t_key in discovered:
-                resolved_name = ""
-                for tr_key in _notification_translation_candidates(t_key):
-                    resolved_name = await translations(
-                        self.hass, DOMAIN, tr_key, "entity", key="name"
-                    )
-                    if resolved_name:
-                        break
-                translated_names.append(resolved_name or t_key)
-
-            human_readable = "\n".join(translated_names)
-            await translated_notification(
-                self.hass,
-                DOMAIN,
-                "new_sensors",
-                {"added_sensors": f"{human_readable}\n"},
-            )
-
         merged = list(dict.fromkeys([*loaded, *discovered]))
 
         if is_wslink:
@@ -348,10 +336,11 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.async_set_updated_data(remaped_items)
 
-        # Publish discoveries once the data is available, so entities created by
-        # the platforms expose their value right away.
-        if set(merged) - set(loaded):
+        if new_keys := set(merged) - set(loaded):
+            # Publish discoveries once the data is available, so entities created
+            # by the platforms expose their value right away.
             async_dispatcher_send(self.hass, signal_new_keys(self.config_entry))
+            await self._async_notify_new_modules(new_keys, loaded)
 
         if self.config_entry.options.get(DEV_DBG):
             _LOGGER.info("Dev log: %s", anonymize(data))

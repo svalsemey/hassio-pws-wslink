@@ -237,8 +237,6 @@ BATTERY_LIST = [
     *T6_BATTERY_KEYS,
 ]
 
-BATTERY_NON_BINARY: list[str] = [T8_BATTERY, T9_BATTERY, T10_BATTERY, T11_BATTERY]
-
 CONNECTION_GATED_SENSORS: Final[dict[str, list[str]]] = {
     # Type1 (outdoor module)
     OUTSIDE_CONNECTION: [
