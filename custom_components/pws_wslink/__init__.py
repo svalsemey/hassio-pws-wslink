@@ -13,6 +13,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -31,6 +32,7 @@ from .const import (
     DEFAULT_CLEANUP_INACTIVE_STREAK,
     DEV_DBG,
     DOMAIN,
+    RELOAD_OPTIONS,
     ROUTES_KEY,
     SENSORS_TO_LOAD,
     URI_API_PWS,
@@ -47,6 +49,7 @@ from .helpers import (
     loaded_sensors,
     remap_items_pws,
     remap_items_wslink,
+    signal_new_keys,
     translated_notification,
     translations,
 )
@@ -154,6 +157,17 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for module in config_entry.options.get(WSLINK_PURGED_MODULES, [])
             if module in WSLINK_PURGE_MODULES
         }
+        # Snapshot of the options read while setting up, used to decide reloads.
+        self._setup_options = {
+            key: config_entry.options.get(key) for key in RELOAD_OPTIONS
+        }
+
+    def reload_required(self) -> bool:
+        """Return True when an option only read at setup time has changed."""
+        return any(
+            value != self.config_entry.options.get(key)
+            for key, value in self._setup_options.items()
+        )
 
     def _module_connected_from_raw(self, raw_data: dict, module: str) -> bool | None:
         """Return connection status for one WSLink module from raw payload."""
@@ -334,6 +348,11 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.async_set_updated_data(remaped_items)
 
+        # Publish discoveries once the data is available, so entities created by
+        # the platforms expose their value right away.
+        if set(merged) - set(loaded):
+            async_dispatcher_send(self.hass, signal_new_keys(self.config_entry))
+
         if self.config_entry.options.get(DEV_DBG):
             _LOGGER.info("Dev log: %s", anonymize(data))
 
@@ -357,12 +376,18 @@ def _async_routes(hass: HomeAssistant) -> Routes:
     return routes
 
 
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Update setup listener."""
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry only when an option read at setup time has changed.
 
-    await hass.config_entries.async_reload(entry.entry_id)
-
-    _LOGGER.info("Settings updated")
+    Sensor discovery rewrites the options from inside the HTTP handler, so
+    reloading unconditionally would tear down the coordinator while it is still
+    serving the request and reset the module inactivity counters.
+    """
+    coordinator: WeatherDataUpdateCoordinator | None = hass.data[DOMAIN].get(
+        entry.entry_id
+    )
+    if coordinator is None or coordinator.reload_required():
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

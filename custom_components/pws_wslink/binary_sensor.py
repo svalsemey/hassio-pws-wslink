@@ -12,6 +12,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -26,6 +27,7 @@ from .const import (
     WATER_LEAK_LIST,
 )
 from .device_map import active_sensor_keys, device_info_for_key
+from .helpers import signal_new_keys
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -109,26 +111,6 @@ WATER_LEAK_BINARY_SENSORS: tuple[WeatherBinarySensorEntityDescription, ...] = tu
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up Weather Station battery and water leak binary sensors."""
-    # Binary battery and leak fields are WSLink-specific in this integration.
-    if config_entry.options.get(API_MODE) != API_MODE_WSLINK:
-        return
-
-    coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    sensors_to_load = set(active_sensor_keys(config_entry))
-
-    async_add_entities(
-        WeatherBinarySensor(coordinator, description)
-        for description in (*BATTERY_BINARY_SENSORS, *WATER_LEAK_BINARY_SENSORS)
-        if description.key in sensors_to_load
-    )
-
-
 class WeatherBinarySensor(
     CoordinatorEntity[WeatherDataUpdateCoordinator], BinarySensorEntity
 ):
@@ -150,7 +132,7 @@ class WeatherBinarySensor(
         # Bootstrap guard:
         # Keep entities available until at least one payload has been received
         # after integration startup/reload.
-        self._has_seen_payload = False
+        self._has_seen_payload = coordinator.data is not None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -192,3 +174,48 @@ class WeatherBinarySensor(
             None,
             "",
         )
+
+
+def _binary_sensor_entities(
+    config_entry: ConfigEntry,
+    coordinator: WeatherDataUpdateCoordinator,
+) -> list[WeatherBinarySensor]:
+    """Build every binary sensor matching the currently active keys."""
+    sensors_to_load = set(active_sensor_keys(config_entry))
+    return [
+        WeatherBinarySensor(coordinator, description)
+        for description in (*BATTERY_BINARY_SENSORS, *WATER_LEAK_BINARY_SENSORS)
+        if description.key in sensors_to_load
+    ]
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Weather Station battery and water leak binary sensors."""
+    # Binary battery and leak fields are WSLink-specific in this integration.
+    if config_entry.options.get(API_MODE) != API_MODE_WSLINK:
+        return
+
+    coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    added_unique_ids: set[str | None] = set()
+
+    @callback
+    def _async_add_new_entities() -> None:
+        """Add the entities whose key was not exposed by a previous payload."""
+        entities = [
+            entity
+            for entity in _binary_sensor_entities(config_entry, coordinator)
+            if entity.unique_id not in added_unique_ids
+        ]
+        added_unique_ids.update(entity.unique_id for entity in entities)
+        async_add_entities(entities)
+
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, signal_new_keys(config_entry), _async_add_new_entities
+        )
+    )
+    _async_add_new_entities()

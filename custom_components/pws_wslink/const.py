@@ -45,6 +45,9 @@ DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN: Final = 5
 DEFAULT_CLEANUP_INACTIVE_STREAK: Final = 3
 
 WSLINK_PURGED_MODULES: Final = "wslink_purged_modules"
+# Options only read while setting up the entry; changing one requires a reload.
+# Every other option is read live from the entry on each payload.
+RELOAD_OPTIONS: Final = frozenset({API_MODE, WSLINK_PURGED_MODULES})
 
 BARO_PRESSURE: Final = "baro_pressure"
 BATTERY: Final = "battery"

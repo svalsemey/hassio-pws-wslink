@@ -18,6 +18,7 @@ from .const import (
     CONNECTION_KEYS,
     CREDENTIAL_FIELDS,
     DEV_DBG,
+    DOMAIN,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
     REMAP_ITEMS_PWS,
@@ -109,6 +110,11 @@ async def translated_notification(
 def anonymize(data: Mapping[str, Any]) -> dict[str, Any]:
     """Return the received payload without the station credentials."""
     return {key: value for key, value in data.items() if key not in CREDENTIAL_FIELDS}
+
+
+def signal_new_keys(config_entry: ConfigEntry) -> str:
+    """Return the dispatcher signal announcing newly discovered sensor keys."""
+    return f"{DOMAIN}_new_keys_{config_entry.entry_id}"
 
 
 def ha_https_enabled(hass: HomeAssistant) -> bool:

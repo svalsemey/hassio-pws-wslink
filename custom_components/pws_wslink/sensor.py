@@ -6,6 +6,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
@@ -36,7 +37,12 @@ from .const import (
     WIND_SPEED,
 )
 from .device_map import active_sensor_keys, device_info_for_key, module_for_key
-from .helpers import chill_index, heat_index, minutes_since_to_timestamp
+from .helpers import (
+    chill_index,
+    heat_index,
+    minutes_since_to_timestamp,
+    signal_new_keys,
+)
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_pws import SENSOR_TYPES_PWS
 from .sensors_wslink import SENSOR_TYPES_WSLINK
@@ -104,13 +110,11 @@ def _channel_diagnostic_entities(
     ]
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
+def _sensor_entities(
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up Weather Station sensors."""
-    coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: WeatherDataUpdateCoordinator,
+) -> list[SensorEntity]:
+    """Build every sensor entity matching the currently active keys."""
     is_wslink = config_entry.options.get(API_MODE) == API_MODE_WSLINK
     loaded_keys = active_sensor_keys(config_entry)
 
@@ -124,19 +128,43 @@ async def async_setup_entry(
         if {OUTSIDE_TEMP, WIND_SPEED} <= requested:
             requested.add(CHILL_INDEX)
 
-    async_add_entities(
-        [
-            *(
-                WeatherSensor(description, coordinator)
-                for description in (
-                    SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS
-                )
-                if description.key in requested
-                and not (is_wslink and description.key in BATTERY_LIST)
-            ),
-            *_channel_diagnostic_entities(config_entry, loaded_keys),
+    return [
+        *(
+            WeatherSensor(description, coordinator)
+            for description in (SENSOR_TYPES_WSLINK if is_wslink else SENSOR_TYPES_PWS)
+            if description.key in requested
+            and not (is_wslink and description.key in BATTERY_LIST)
+        ),
+        *_channel_diagnostic_entities(config_entry, loaded_keys),
+    ]
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Weather Station sensors and follow later discoveries."""
+    coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    added_unique_ids: set[str | None] = set()
+
+    @callback
+    def _async_add_new_entities() -> None:
+        """Add the entities whose key was not exposed by a previous payload."""
+        entities = [
+            entity
+            for entity in _sensor_entities(config_entry, coordinator)
+            if entity.unique_id not in added_unique_ids
         ]
+        added_unique_ids.update(entity.unique_id for entity in entities)
+        async_add_entities(entities)
+
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, signal_new_keys(config_entry), _async_add_new_entities
+        )
     )
+    _async_add_new_entities()
 
 
 class WeatherSensor(
@@ -157,12 +185,15 @@ class WeatherSensor(
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = description.key
-        self._data = None
+
+        # Seed from the current payload so entities created after a discovery
+        # expose their value without waiting for the next one.
+        self._data = (coordinator.data or {}).get(description.key)
 
         # Bootstrap guard:
         # Keep entities available until at least one payload has been received
         # after integration startup/reload.
-        self._has_seen_payload = False
+        self._has_seen_payload = coordinator.data is not None
 
         # Lightning timestamp stabilization state (persisted/restored)
         self._last_lightning_ts: datetime | None = None
