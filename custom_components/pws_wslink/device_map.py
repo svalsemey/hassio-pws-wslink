@@ -7,8 +7,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
 from .const import (
-    API_MODE,
-    API_MODE_WSLINK,
     BARO_PRESSURE,
     CO,
     CO2,
@@ -29,14 +27,12 @@ from .const import (
     PM10_AQI,
     PM25,
     PM25_AQI,
-    SENSORS_TO_LOAD,
     T5_BATTERY,
     T8_BATTERY,
     T9_BATTERY,
     T10_BATTERY,
     T11_BATTERY,
     VOC,
-    WSLINK_PURGED_MODULES,
 )
 
 _TYPE234_CHANNEL_RE = re.compile(r"^ch([1-7])_")
@@ -79,16 +75,6 @@ def module_for_key(key: str) -> str:
     if key in _TYPE11_KEYS:
         return "type11"
     return "type1"
-
-
-def active_sensor_keys(config_entry: ConfigEntry) -> list[str]:
-    """Return the discovered sensor keys, excluding purged WSLink modules."""
-    keys: list[str] = config_entry.options.get(SENSORS_TO_LOAD) or []
-    if config_entry.options.get(API_MODE) != API_MODE_WSLINK:
-        return keys
-
-    purged = set(config_entry.options.get(WSLINK_PURGED_MODULES) or ())
-    return [key for key in keys if module_for_key(key) not in purged]
 
 
 # Fixed modules: module id -> (device model, strings.json translation key).

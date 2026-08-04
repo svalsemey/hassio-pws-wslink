@@ -1,6 +1,5 @@
 """Weather Station integration."""
 
-from datetime import datetime, timedelta
 from hmac import compare_digest
 import logging
 from typing import Any
@@ -12,22 +11,17 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import dt as dt_util
 
 from .const import (
     API_ID,
     API_KEY,
     API_MODE,
     API_MODE_WSLINK,
-    CLEANUP_INACTIVE_MIN_AGE_MIN,
-    CLEANUP_INACTIVE_STREAK,
     CREDENTIAL_FIELDS_PWS,
     CREDENTIAL_FIELDS_WSLINK,
-    DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
-    DEFAULT_CLEANUP_INACTIVE_STREAK,
     DEV_DBG,
     DOMAIN,
     RELOAD_OPTIONS,
@@ -35,19 +29,15 @@ from .const import (
     SENSORS_TO_LOAD,
     URI_API_PWS,
     URI_API_WSLINK,
-    WSLINK_CONNECTION_KEY_BY_MODULE,
-    WSLINK_PURGE_MODULES,
-    WSLINK_PURGED_MODULES,
-    WSLINK_SENSOR_KEYS_BY_MODULE,
 )
-from .device_map import channel_of_module, module_for_key, module_metadata
+from .device_map import module_for_key, module_metadata
 from .helpers import (
     anonymize,
     check_disabled,
     loaded_sensors,
     remap_items_pws,
     remap_items_wslink,
-    signal_new_keys,
+    signal_keys_changed,
     translated_notification,
     translations,
 )
@@ -57,68 +47,6 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
-def _parse_connected(value) -> bool | None:
-    """Parse WSLink connection flag (1/0)."""
-    if value in (None, ""):
-        return None
-    try:
-        return int(float(value)) == 1
-    except TypeError, ValueError:
-        return None
-
-
-def _sensor_keys_for_modules(modules: set[str]) -> set[str]:
-    """Return flattened sensor keys for multiple WSLink modules."""
-    keys: set[str] = set()
-    for module in modules:
-        keys.update(set(WSLINK_SENSOR_KEYS_BY_MODULE.get(module, ())))
-    return keys
-
-
-async def _async_remove_stale_wslink_entities_and_devices(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    inactive_modules: set[str],
-) -> None:
-    """Remove stale entities/devices for inactive WSLink modules."""
-    if not inactive_modules:
-        return
-
-    ent_reg = er.async_get(hass)
-
-    sensor_keys = _sensor_keys_for_modules(inactive_modules)
-    target_unique_ids = set(sensor_keys)
-    target_unique_ids.update(f"{key}_binary" for key in sensor_keys)
-
-    # Channel diagnostic entities only exist for channel modules.
-    target_unique_ids.update(
-        f"{module}_channel_number"
-        for module in inactive_modules
-        if channel_of_module(module) is not None
-    )
-
-    for entity_id, reg_entry in list(ent_reg.entities.items()):
-        if reg_entry.config_entry_id != entry.entry_id:
-            continue
-        if reg_entry.unique_id in target_unique_ids:
-            ent_reg.async_remove(entity_id)
-
-    dev_reg = dr.async_get(hass)
-    for module in inactive_modules:
-        identifier = (DOMAIN, f"{entry.entry_id}_{module}")
-        device = dev_reg.async_get_device(identifiers={identifier})
-        if device is None:
-            continue
-
-        linked_entities = er.async_entries_for_device(
-            ent_reg, device_id=device.id, include_disabled_entities=True
-        )
-        if linked_entities:
-            continue
-
-        dev_reg.async_remove_device(device.id)
-
-
 class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetched data."""
 
@@ -126,14 +54,6 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Init global updater."""
         super().__init__(hass, _LOGGER, config_entry=config_entry, name=DOMAIN)
 
-        # Safe cleanup state for WSLink modules
-        self._inactive_streak: dict[str, int] = {}
-        self._inactive_since: dict[str, datetime] = {}
-        self._purged_modules: set[str] = {
-            module
-            for module in config_entry.options.get(WSLINK_PURGED_MODULES, [])
-            if module in WSLINK_PURGE_MODULES
-        }
         # Snapshot of the options read while setting up, used to decide reloads.
         self._setup_options = {
             key: config_entry.options.get(key) for key in RELOAD_OPTIONS
@@ -145,76 +65,6 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             value != self.config_entry.options.get(key)
             for key, value in self._setup_options.items()
         )
-
-    def _module_connected_from_raw(self, raw_data: dict, module: str) -> bool | None:
-        """Return connection status for one WSLink module from raw payload."""
-        conn_key = WSLINK_CONNECTION_KEY_BY_MODULE.get(module)
-        if conn_key is None:
-            return None
-        return _parse_connected(raw_data.get(conn_key))
-
-    def _newly_confirmed_inactive_modules(self, raw_data: dict) -> set[str]:
-        """Return WSLink modules newly confirmed as inactive (safe cleanup).
-
-        A module is confirmed inactive only when both conditions are met:
-        1) It is disconnected or missing for at least N consecutive payloads
-        (`cleanup_inactive_streak`).
-        2) It remains inactive for at least the configured minimum duration
-        (`cleanup_inactive_min_age_min`).
-
-        Only modules listed in `WSLINK_PURGE_MODULES` are evaluated.
-        Once a module is confirmed inactive, it is emitted only once until it reconnects.
-        When a module reconnects (`cn == 1`), its inactivity tracking state is reset.
-        """
-
-        now = dt_util.utcnow()
-        streak_threshold = self._cleanup_streak_threshold()
-        min_age = self._cleanup_min_age()
-        newly_confirmed: set[str] = set()
-
-        for module in WSLINK_PURGE_MODULES:
-            connected = self._module_connected_from_raw(raw_data, module)
-
-            if connected is True:
-                # Recovery/reset if module comes back online
-                self._inactive_streak.pop(module, None)
-                self._inactive_since.pop(module, None)
-                self._purged_modules.discard(module)
-                continue
-
-            # connected is False or None -> count as inactive sample
-            self._inactive_streak[module] = self._inactive_streak.get(module, 0) + 1
-            self._inactive_since.setdefault(module, now)
-
-            streak_ok = self._inactive_streak[module] >= streak_threshold
-            age_ok = (now - self._inactive_since[module]) >= min_age
-
-            if streak_ok and age_ok and module not in self._purged_modules:
-                newly_confirmed.add(module)
-                self._purged_modules.add(module)
-
-        return newly_confirmed
-
-    def _cleanup_streak_threshold(self) -> int:
-        """Return cleanup streak threshold from options with safe fallback."""
-        raw_value = self.config_entry.options.get(
-            CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
-        )
-        try:
-            return max(1, int(raw_value))
-        except TypeError, ValueError:
-            return DEFAULT_CLEANUP_INACTIVE_STREAK
-
-    def _cleanup_min_age(self) -> timedelta:
-        """Return cleanup minimum inactivity age from options with safe fallback."""
-        raw_value = self.config_entry.options.get(
-            CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
-        )
-        try:
-            minutes = max(1, int(raw_value))
-        except TypeError, ValueError:
-            minutes = DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
-        return timedelta(minutes=minutes)
 
     def _credentials_match(self, station_id: str, station_key: str) -> bool:
         """Compare station credentials using constant-time comparison.
@@ -282,56 +132,17 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         remaped_items = remap_items_wslink(data) if is_wslink else remap_items_pws(data)
 
-        loaded = loaded_sensors(self.config_entry) or []
-        discovered = check_disabled(remaped_items, self.config_entry) or []
-        merged = list(dict.fromkeys([*loaded, *discovered]))
+        loaded = loaded_sensors(self.config_entry)
+        merged = list(
+            dict.fromkeys(
+                [*loaded, *(check_disabled(remaped_items, self.config_entry) or [])]
+            )
+        )
 
-        if is_wslink:
-            purged_before = set(self._purged_modules)
-            inactive_modules = self._newly_confirmed_inactive_modules(data)
-
-            still_inactive_purged = {
-                module
-                for module in self._purged_modules
-                if self._module_connected_from_raw(data, module) is not True
-            }
-
-            effective_inactive_modules = inactive_modules | still_inactive_purged
-            inactive_keys = _sensor_keys_for_modules(effective_inactive_modules)
-
-            if inactive_keys:
-                discovered = [key for key in discovered if key not in inactive_keys]
-                merged = [key for key in merged if key not in inactive_keys]
-
-            options_changed = False
-            new_options = dict(self.config_entry.options)
-
-            if merged != loaded:
-                new_options[SENSORS_TO_LOAD] = merged
-                options_changed = True
-
-            if self._purged_modules != purged_before:
-                new_options[WSLINK_PURGED_MODULES] = sorted(self._purged_modules)
-                options_changed = True
-
-            if options_changed:
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, options=new_options
-                )
-
-            if inactive_modules:
-                _LOGGER.info(
-                    "Safe cleanup: confirmed inactive modules=%s",
-                    ", ".join(sorted(inactive_modules)),
-                )
-                await _async_remove_stale_wslink_entities_and_devices(
-                    self.hass, self.config_entry, inactive_modules
-                )
-        elif merged != loaded:
-            new_options = dict(self.config_entry.options)
-            new_options[SENSORS_TO_LOAD] = merged
+        if merged != loaded:
             self.hass.config_entries.async_update_entry(
-                self.config_entry, options=new_options
+                self.config_entry,
+                options={**self.config_entry.options, SENSORS_TO_LOAD: merged},
             )
 
         self.async_set_updated_data(remaped_items)
@@ -339,7 +150,7 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if new_keys := set(merged) - set(loaded):
             # Publish discoveries once the data is available, so entities created
             # by the platforms expose their value right away.
-            async_dispatcher_send(self.hass, signal_new_keys(self.config_entry))
+            async_dispatcher_send(self.hass, signal_keys_changed(self.config_entry))
             await self._async_notify_new_modules(new_keys, loaded)
 
         if self.config_entry.options.get(DEV_DBG):
@@ -393,6 +204,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(update_listener))
+
+    return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Let the user delete a module from its Home Assistant device page.
+
+    The sensor keys of the module are dropped from the entry, so the device and
+    its entities are only recreated once the station sends that module again.
+    """
+    prefix = f"{config_entry.entry_id}_"
+    modules = {
+        identifier.removeprefix(prefix)
+        for domain, identifier in device_entry.identifiers
+        if domain == DOMAIN and identifier.startswith(prefix)
+    }
+
+    loaded = loaded_sensors(config_entry)
+    remaining = [key for key in loaded if module_for_key(key) not in modules]
+    if remaining != loaded:
+        hass.config_entries.async_update_entry(
+            config_entry,
+            options={**config_entry.options, SENSORS_TO_LOAD: remaining},
+        )
+        async_dispatcher_send(hass, signal_keys_changed(config_entry))
 
     return True
 

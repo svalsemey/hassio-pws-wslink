@@ -112,9 +112,9 @@ def anonymize(data: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in data.items() if key not in CREDENTIAL_FIELDS}
 
 
-def signal_new_keys(config_entry: ConfigEntry) -> str:
-    """Return the dispatcher signal announcing newly discovered sensor keys."""
-    return f"{DOMAIN}_new_keys_{config_entry.entry_id}"
+def signal_keys_changed(config_entry: ConfigEntry) -> str:
+    """Return the dispatcher signal announcing a change in the active sensor keys."""
+    return f"{DOMAIN}_keys_changed_{config_entry.entry_id}"
 
 
 def ha_https_enabled(hass: HomeAssistant) -> bool:

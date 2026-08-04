@@ -35,7 +35,6 @@ from .const import (
     WIND_SPEED,
 )
 from .device_map import (
-    active_sensor_keys,
     channel_of_module,
     device_info_for_key,
     device_info_for_module,
@@ -44,8 +43,9 @@ from .device_map import (
 from .helpers import (
     chill_index,
     heat_index,
+    loaded_sensors,
     minutes_since_to_timestamp,
-    signal_new_keys,
+    signal_keys_changed,
 )
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_pws import SENSOR_TYPES_PWS
@@ -102,7 +102,7 @@ def _sensor_entities(
 ) -> list[SensorEntity]:
     """Build every sensor entity matching the currently active keys."""
     is_wslink = config_entry.options.get(API_MODE) == API_MODE_WSLINK
-    loaded_keys = active_sensor_keys(config_entry)
+    loaded_keys = loaded_sensors(config_entry)
 
     # Derived sensors are computed locally and never pushed by the station.
     requested = set(loaded_keys)
@@ -130,27 +130,29 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Weather Station sensors and follow later discoveries."""
+    """Set up Weather Station sensors and follow later key changes."""
     coordinator: WeatherDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    added_unique_ids: set[str | None] = set()
+    tracked_unique_ids: set[str | None] = set()
 
     @callback
-    def _async_add_new_entities() -> None:
-        """Add the entities whose key was not exposed by a previous payload."""
-        entities = [
-            entity
-            for entity in _sensor_entities(config_entry, coordinator)
-            if entity.unique_id not in added_unique_ids
+    def _async_sync_entities() -> None:
+        """Add the entities of newly active keys and forget the removed ones."""
+        entities = _sensor_entities(config_entry, coordinator)
+        current_ids = {entity.unique_id for entity in entities}
+        tracked_unique_ids.intersection_update(current_ids)
+
+        new_entities = [
+            entity for entity in entities if entity.unique_id not in tracked_unique_ids
         ]
-        added_unique_ids.update(entity.unique_id for entity in entities)
-        async_add_entities(entities)
+        tracked_unique_ids.update(current_ids)
+        async_add_entities(new_entities)
 
     config_entry.async_on_unload(
         async_dispatcher_connect(
-            hass, signal_new_keys(config_entry), _async_add_new_entities
+            hass, signal_keys_changed(config_entry), _async_sync_entities
         )
     )
-    _async_add_new_entities()
+    _async_sync_entities()
 
 
 class WeatherSensor(

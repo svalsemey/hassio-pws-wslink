@@ -19,16 +19,11 @@ from .const import (
     API_MODE,
     API_MODE_PWS,
     API_MODE_WSLINK,
-    CLEANUP_INACTIVE_MIN_AGE_MIN,
-    CLEANUP_INACTIVE_STREAK,
-    DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
-    DEFAULT_CLEANUP_INACTIVE_STREAK,
     DEV_DBG,
     DOMAIN,
     INVALID_CREDENTIALS,
     SENSORS_TO_LOAD,
     URL_WSLINK_ADDON,
-    WSLINK_PURGED_MODULES,
 )
 from .helpers import ha_https_enabled
 
@@ -44,7 +39,6 @@ class ConfigOptionsFlowHandler(OptionsFlow):
         self.user_data: dict[str, Any] = {}
         self.user_data_schema = {}
         self.sensors: dict[str, Any] = {}
-        self.internal_options: dict[str, Any] = {}
         self._pending_user_input: dict[str, Any] | None = None
 
     async def _get_entry_data(self):
@@ -55,12 +49,6 @@ class ConfigOptionsFlowHandler(OptionsFlow):
             API_ID: entry_data.get(API_ID),
             API_KEY: entry_data.get(API_KEY),
             API_MODE: entry_data.get(API_MODE, API_MODE_PWS),
-            CLEANUP_INACTIVE_STREAK: entry_data.get(
-                CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
-            ),
-            CLEANUP_INACTIVE_MIN_AGE_MIN: entry_data.get(
-                CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
-            ),
             DEV_DBG: entry_data.get(DEV_DBG, False),
         }
 
@@ -79,32 +67,6 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            vol.Optional(
-                CLEANUP_INACTIVE_STREAK,
-                default=self.user_data.get(
-                    CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1,
-                    max=50,
-                    step=1,
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Optional(
-                CLEANUP_INACTIVE_MIN_AGE_MIN,
-                default=self.user_data.get(
-                    CLEANUP_INACTIVE_MIN_AGE_MIN, DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1,
-                    max=120,
-                    step=1,
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
             vol.Optional(DEV_DBG, default=self.user_data.get(DEV_DBG, False)): bool,
         }
 
@@ -115,34 +77,6 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                 else []
             )
         }
-
-        self.internal_options = {
-            WSLINK_PURGED_MODULES: (
-                entry_data.get(WSLINK_PURGED_MODULES)
-                if isinstance(entry_data.get(WSLINK_PURGED_MODULES), list)
-                else []
-            )
-        }
-
-    def _create_entry(self, user_input: dict[str, Any]) -> ConfigFlowResult:
-        """Store the options with the number selector values coerced to integers."""
-        return self.async_create_entry(
-            title="",
-            data={
-                **user_input,
-                CLEANUP_INACTIVE_STREAK: int(
-                    user_input.get(
-                        CLEANUP_INACTIVE_STREAK, DEFAULT_CLEANUP_INACTIVE_STREAK
-                    )
-                ),
-                CLEANUP_INACTIVE_MIN_AGE_MIN: int(
-                    user_input.get(
-                        CLEANUP_INACTIVE_MIN_AGE_MIN,
-                        DEFAULT_CLEANUP_INACTIVE_MIN_AGE_MIN,
-                    )
-                ),
-            },
-        )
 
     async def async_step_init(self, user_input=None):
         """Manage options."""
@@ -170,14 +104,12 @@ class ConfigOptionsFlowHandler(OptionsFlow):
         else:
             # Retain sensors
             user_input.update(self.sensors)
-            # Retain purged modules
-            user_input.update(self.internal_options)
 
             if not ha_https_enabled(self.hass):
                 self._pending_user_input = user_input
                 return await self.async_step_https_warning()
 
-            return self._create_entry(user_input)
+            return self.async_create_entry(title="", data=user_input)
 
         self.user_data = user_input
 
@@ -196,7 +128,7 @@ class ConfigOptionsFlowHandler(OptionsFlow):
                 if self._pending_user_input is None:
                     return self.async_abort(reason="unknown")
 
-                return self._create_entry(self._pending_user_input)
+                return self.async_create_entry(title="", data=self._pending_user_input)
 
             errors["base"] = "confirm_https"
 
