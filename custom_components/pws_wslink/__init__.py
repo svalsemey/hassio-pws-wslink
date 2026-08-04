@@ -36,6 +36,7 @@ from .helpers import (
     translated_notification,
     translations,
 )
+from .lightning import LightningTracker
 from .routes import StationRouter
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,8 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._setup_options = {
             key: config_entry.options.get(key) for key in RELOAD_OPTIONS
         }
+        # Shared by the strike time and distance entities of this station.
+        self.lightning = LightningTracker()
 
     def reload_required(self) -> bool:
         """Return True when an option only read at setup time has changed."""
@@ -127,6 +130,7 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self.api_mode == API_MODE_WSLINK
             else remap_items_pws(data)
         )
+        self.lightning.apply(remaped_items)
 
         loaded = loaded_sensors(self.config_entry)
         merged = list(

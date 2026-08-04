@@ -108,6 +108,19 @@ LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES: Final = (
 )
 LIGHTNING_STRIKE_COUNT_DURING_1_HOUR: Final = "lightning_strike_count_during_1_hour"
 LIGHTNING_STRIKE_COUNT_DURING_1_DAY: Final = "lightning_strike_count_during_1_day"
+# Strike counters, used to detect a payload that contradicts the elapsed time.
+LIGHTNING_COUNT_KEYS: Final[tuple[str, ...]] = (
+    LIGHTNING_STRIKE_COUNT_LAST_HOUR,
+    LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
+    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
+    LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
+    LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
+)
+
+# Keys the coordinator replaces with a stabilized value before publishing.
+LIGHTNING_STABILIZED_KEYS: Final = frozenset(
+    {LIGHTNING_STRIKE_TIME, LIGHTNING_DISTANCE}
+)
 
 # Type6 (water leak channels 1..7)
 T6_WATER_LEAK_KEYS: list[str] = [f"t6_c{i}_water_leak" for i in range(1, 8)]
@@ -153,6 +166,7 @@ CONNECTION_KEYS: Final[list[str]] = [
 
 WATER_LEAK_LIST: list[str] = T6_WATER_LEAK_KEYS
 
+# Adding a key here also means updating the entity table in README.md.
 REMAP_ITEMS_PWS: dict[str, str] = {
     "baromin": BARO_PRESSURE,
     "tempf": OUTSIDE_TEMP,
@@ -179,6 +193,7 @@ REMAP_ITEMS_PWS: dict[str, str] = {
     },
 }
 
+# Adding a key here also means updating the entity table in README.md.
 REMAP_ITEMS_WSLINK: dict[str, str] = {
     "intem": INDOOR_TEMP,
     "inhum": INDOOR_HUMIDITY,

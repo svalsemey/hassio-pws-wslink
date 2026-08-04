@@ -141,26 +141,29 @@ def ha_https_enabled(hass: HomeAssistant) -> bool:
     return bool(getattr(hass.http, "ssl_certificate", None))
 
 
-def minutes_since_to_timestamp(value: str | float | None) -> datetime | None:
-    """Convert minutes since last event to UTC timestamp rounded to minute.
-
-    Input is expected to be the number of minutes since the last lightning strike.
-    Returns timezone-aware UTC datetime with seconds and microseconds set to zero.
-    """
-
+def to_int(value: Any) -> int | None:
+    """Convert a payload value to int, None when missing or not a number."""
     if value in (None, ""):
         return None
-
     try:
-        minutes = int(float(value))
-    except TypeError, ValueError:
+        return int(float(value))
+    except (TypeError, ValueError):
         return None
 
-    if minutes < 0:
+
+def minutes_since_to_timestamp(value: str | float | None) -> datetime | None:
+    """Convert minutes since the last strike to a UTC timestamp.
+
+    The station reports whole minutes, so the result is rounded down to the
+    minute as well.
+    """
+    minutes = to_int(value)
+    if minutes is None or minutes < 0:
         return None
 
-    timestamp = dt_util.utcnow() - timedelta(minutes=minutes)
-    return timestamp.replace(second=0, microsecond=0)
+    return (dt_util.utcnow() - timedelta(minutes=minutes)).replace(
+        second=0, microsecond=0
+    )
 
 
 def remap_items_pws(entities: Mapping[str, Any]) -> dict[str, Any]:
@@ -175,12 +178,8 @@ def remap_items_pws(entities: Mapping[str, Any]) -> dict[str, Any]:
 
 def _is_connected_flag(value: Any) -> bool | None:
     """Return True/False when parsable, None when unknown."""
-    if value in (None, ""):
-        return None
-    try:
-        return int(float(value)) == 1
-    except TypeError, ValueError:
-        return None
+    flag = to_int(value)
+    return None if flag is None else flag == 1
 
 
 def remap_items_wslink(entities: Mapping[str, Any]) -> dict[str, Any]:
@@ -324,17 +323,13 @@ def chill_index(data: Mapping[str, Any]) -> float | None:
     )
 
 
-def voc_level_to_text(value: str) -> VOCLevel | None:
-    """Map 1-5 VOC level to text state."""
-    if value in (None, ""):
-        return None
-    return VOC_LEVEL_MAP.get(int(float(value)))
+def voc_level_to_text(value: Any) -> VOCLevel | None:
+    """Map the 1-5 VOC level to its text state."""
+    level = to_int(value)
+    return None if level is None else VOC_LEVEL_MAP.get(level)
 
 
-def battery_5step_to_pct(value: str) -> int | None:
-    """Convert 0-5 battery steps to percentage."""
-
-    if value in (None, ""):
-        return None
-
-    return round(int(float(value)) / 5 * 100)
+def battery_5step_to_pct(value: Any) -> int | None:
+    """Convert the 0-5 battery steps to a percentage."""
+    steps = to_int(value)
+    return None if steps is None else round(steps / 5 * 100)

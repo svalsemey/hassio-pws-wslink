@@ -27,12 +27,12 @@ from .const import (
     WATER_LEAK_LIST,
 )
 from .device_map import device_info_for_key
-from .helpers import loaded_sensors, signal_keys_changed
+from .helpers import loaded_sensors, signal_keys_changed, to_int
 
 
 @dataclass(frozen=True, kw_only=True)
 class WeatherBinarySensorEntityDescription(BinarySensorEntityDescription):
-    """Describe battery binary sensor entities."""
+    """Describe the battery and water leak binary sensor entities."""
 
     value_fn: Callable[[Any], bool | None]
 
@@ -48,15 +48,7 @@ def _battery_is_low(value: Any) -> bool | None:
     - is_on = battery low
     - is_off = battery normal
     """
-
-    if value in (None, ""):
-        return None
-
-    try:
-        parsed = int(float(value))
-    except TypeError, ValueError:
-        return None
-
+    parsed = to_int(value)
     if parsed == 0:
         return True
     if parsed == 1:
@@ -74,14 +66,7 @@ def _water_leak_detected(value: Any) -> bool | None:
     HA moisture binary_sensor:
     - is_on = moisture/leak detected
     """
-    if value in (None, ""):
-        return None
-
-    try:
-        parsed = int(float(value))
-    except TypeError, ValueError:
-        return None
-
+    parsed = to_int(value)
     if parsed == 1:
         return True
     if parsed == 0:
@@ -114,7 +99,7 @@ WATER_LEAK_BINARY_SENSORS: tuple[WeatherBinarySensorEntityDescription, ...] = tu
 class WeatherBinarySensor(
     CoordinatorEntity[WeatherDataUpdateCoordinator], BinarySensorEntity
 ):
-    """Representation of Weather Station battery binary sensor."""
+    """Representation of one Weather Station binary sensor."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -145,7 +130,7 @@ class WeatherBinarySensor(
 
     @property
     def is_on(self) -> bool | None:
-        """Return true when battery is low."""
+        """Return the state the payload maps to for this device class."""
         if not self.coordinator.data:
             return None
         raw_value = self.coordinator.data.get(self.entity_description.key)

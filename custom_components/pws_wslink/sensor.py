@@ -22,12 +22,7 @@ from .const import (
     DOMAIN,
     HEAT_INDEX,
     LIGHTNING_DISTANCE,
-    LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
-    LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
-    LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
-    LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
-    LIGHTNING_STRIKE_COUNT_LAST_HOUR,
-    LIGHTNING_STRIKE_TIME,
+    LIGHTNING_STABILIZED_KEYS,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
     WIND_AZIMUTH,
@@ -44,8 +39,8 @@ from .helpers import (
     chill_index,
     heat_index,
     loaded_sensors,
-    minutes_since_to_timestamp,
     signal_keys_changed,
+    to_int,
 )
 from .sensors_common import WeatherSensorEntityDescription
 from .sensors_pws import SENSOR_TYPES_PWS
@@ -183,34 +178,21 @@ class WeatherSensor(
         # after integration startup/reload.
         self._has_seen_payload = coordinator.data is not None
 
-        # Lightning timestamp stabilization state (persisted/restored)
-        self._last_lightning_ts: datetime | None = None
-        self._last_lightning_minutes: int | None = None
-        self._last_lightning_count_last_hour: int | None = None
-        self._last_lightning_distance: int | None = None
-
     async def async_added_to_hass(self) -> None:
-        """Handle listeners and restore state."""
+        """Seed the shared lightning tracker with the restored value."""
         await super().async_added_to_hass()
 
-        # Restore persisted lightning state after HA restart
-        if self.entity_description.key in (LIGHTNING_STRIKE_TIME, LIGHTNING_DISTANCE):
-            last_state = await self.async_get_last_state()
-            if last_state:
-                if self.entity_description.key == LIGHTNING_STRIKE_TIME:
-                    restored_ts = dt_util.parse_datetime(last_state.state)
-                    if restored_ts is not None:
-                        self._last_lightning_ts = dt_util.as_utc(restored_ts)
+        key = self.entity_description.key
+        if key not in LIGHTNING_STABILIZED_KEYS:
+            return
 
-                if self.entity_description.key == LIGHTNING_DISTANCE:
-                    self._last_lightning_distance = self._to_int(last_state.state)
+        if (last_state := await self.async_get_last_state()) is None:
+            return
 
-                self._last_lightning_minutes = self._to_int(
-                    last_state.attributes.get("last_minutes_since_strike")
-                )
-                self._last_lightning_count_last_hour = self._to_int(
-                    last_state.attributes.get("last_count_last_hour")
-                )
+        if key == LIGHTNING_DISTANCE:
+            self.coordinator.lightning.distance = to_int(last_state.state)
+        elif (restored := dt_util.parse_datetime(last_state.state)) is not None:
+            self.coordinator.lightning.last_strike = dt_util.as_utc(restored)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -219,16 +201,6 @@ class WeatherSensor(
             self._data = data.get(self.entity_description.key)
             self._has_seen_payload = True
         super()._handle_coordinator_update()
-
-    @staticmethod
-    def _to_int(value) -> int | None:
-        """Convert value to int safely."""
-        if value in (None, ""):
-            return None
-        try:
-            return int(float(value))
-        except TypeError, ValueError:
-            return None
 
     @property
     def available(self) -> bool:
@@ -251,6 +223,11 @@ class WeatherSensor(
         )
         key = self.entity_description.key
 
+        if key in LIGHTNING_STABILIZED_KEYS:
+            # The coordinator publishes these keys even before a coherent strike
+            # is known, so presence of the key is what availability follows.
+            return key in data
+
         if key == WIND_AZIMUTH:
             return data.get(WIND_DIR) not in (None, "")
 
@@ -266,132 +243,6 @@ class WeatherSensor(
 
         return data.get(key) not in (None, "")
 
-    def _stable_lightning_last_strike(self) -> datetime | None:
-        """Return stable lightning last-strike timestamp.
-
-        Strict rule:
-        - On fresh install (no stored timestamp), keep unknown while all strike counters are 0.
-        - Update timestamp ONLY when:
-        1) minutes-since-strike drops (counter reset/new strike)
-        2) and strike count over last hour increases at the same time.
-        - Otherwise keep previously coherent timestamp.
-        """
-        if not self.coordinator.data:
-            return self._last_lightning_ts
-
-        raw_minutes = self.coordinator.data.get(LIGHTNING_STRIKE_TIME)
-        raw_count = self.coordinator.data.get(LIGHTNING_STRIKE_COUNT_LAST_HOUR)
-
-        minutes_now = self._to_int(raw_minutes)
-        count_now = self._to_int(raw_count)
-
-        # Fresh install behavior:
-        # no known last strike yet + no strike counters > 0 => unknown
-        if self._last_lightning_ts is None and not self._has_any_lightning_strike():
-            self._last_lightning_minutes = minutes_now
-            self._last_lightning_count_last_hour = count_now
-            return None
-
-        # No usable current value -> keep last coherent one
-        if minutes_now is None:
-            return self._last_lightning_ts
-
-        candidate_ts = minutes_since_to_timestamp(minutes_now)
-        if candidate_ts is None:
-            return self._last_lightning_ts
-
-        # First coherent sample (after first detected strike or restored state)
-        if self._last_lightning_ts is None:
-            self._last_lightning_ts = candidate_ts
-            self._last_lightning_minutes = minutes_now
-            self._last_lightning_count_last_hour = count_now
-            return self._last_lightning_ts
-
-        minutes_dropped = (
-            self._last_lightning_minutes is not None
-            and minutes_now < self._last_lightning_minutes
-        )
-        count_increased = (
-            count_now is not None
-            and self._last_lightning_count_last_hour is not None
-            and count_now > self._last_lightning_count_last_hour
-        )
-
-        # Accept as real new strike ONLY if both conditions are true
-        if minutes_dropped and count_increased:
-            self._last_lightning_ts = candidate_ts
-
-        # Always refresh comparators for next cycle
-        self._last_lightning_minutes = minutes_now
-        self._last_lightning_count_last_hour = count_now
-
-        return self._last_lightning_ts
-
-    def _stable_lightning_distance(self) -> int | None:
-        """Return stable lightning distance in km (integer).
-
-        Strict rule (same as lightning_last_strike_time):
-        - Update distance ONLY when:
-        1) minutes-since-strike drops
-        2) and strike count over last hour increases.
-        - Otherwise keep previously coherent distance.
-        """
-        if not self.coordinator.data:
-            return self._last_lightning_distance
-
-        raw_distance = self.coordinator.data.get(LIGHTNING_DISTANCE)
-        raw_minutes = self.coordinator.data.get(LIGHTNING_STRIKE_TIME)
-        raw_count = self.coordinator.data.get(LIGHTNING_STRIKE_COUNT_LAST_HOUR)
-
-        distance_now = self._to_int(raw_distance)
-        minutes_now = self._to_int(raw_minutes)
-        count_now = self._to_int(raw_count)
-
-        if distance_now is None:
-            return self._last_lightning_distance
-
-        # First coherent sample
-        if self._last_lightning_distance is None:
-            self._last_lightning_distance = distance_now
-            self._last_lightning_minutes = minutes_now
-            self._last_lightning_count_last_hour = count_now
-            return self._last_lightning_distance
-
-        minutes_dropped = (
-            self._last_lightning_minutes is not None
-            and minutes_now is not None
-            and minutes_now < self._last_lightning_minutes
-        )
-        count_increased = (
-            count_now is not None
-            and self._last_lightning_count_last_hour is not None
-            and count_now > self._last_lightning_count_last_hour
-        )
-
-        # Accept as real new strike ONLY if both conditions are true
-        if minutes_dropped and count_increased:
-            self._last_lightning_distance = distance_now
-
-        # Always refresh comparators for next cycle
-        self._last_lightning_minutes = minutes_now
-        self._last_lightning_count_last_hour = count_now
-
-        return self._last_lightning_distance
-
-    def _has_any_lightning_strike(self) -> bool:
-        """Return True if at least one lightning counter is > 0."""
-        data = self.coordinator.data or {}
-        return any(
-            (value := self._to_int(data.get(key))) is not None and value > 0
-            for key in (
-                LIGHTNING_STRIKE_COUNT_LAST_HOUR,
-                LIGHTNING_STRIKE_COUNT_DURING_5_MINUTES,
-                LIGHTNING_STRIKE_COUNT_DURING_30_MINUTES,
-                LIGHTNING_STRIKE_COUNT_DURING_1_HOUR,
-                LIGHTNING_STRIKE_COUNT_DURING_1_DAY,
-            )
-        )
-
     @property
     def native_value(self) -> StateType | datetime:
         """Return the current value of the entity."""
@@ -399,11 +250,6 @@ class WeatherSensor(
             return None
 
         key = self.entity_description.key
-        if key == LIGHTNING_STRIKE_TIME:
-            return self._stable_lightning_last_strike()
-        if key == LIGHTNING_DISTANCE:
-            return self._stable_lightning_distance()
-
         data = self.coordinator.data or {}
         if key == WIND_AZIMUTH:
             return self.entity_description.value_fn(data.get(WIND_DIR))
@@ -417,22 +263,6 @@ class WeatherSensor(
         return (
             None if self._data == "" else self.entity_description.value_fn(self._data)
         )
-
-    @property
-    def extra_state_attributes(self) -> dict[str, int] | None:
-        """Expose the comparators used to restore the lightning state."""
-        if self.entity_description.key not in (
-            LIGHTNING_STRIKE_TIME,
-            LIGHTNING_DISTANCE,
-        ):
-            return None
-
-        attrs: dict[str, int] = {}
-        if self._last_lightning_minutes is not None:
-            attrs["last_minutes_since_strike"] = self._last_lightning_minutes
-        if self._last_lightning_count_last_hour is not None:
-            attrs["last_count_last_hour"] = self._last_lightning_count_last_hour
-        return attrs or None
 
     @property
     def device_info(self):
