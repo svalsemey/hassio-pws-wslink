@@ -15,32 +15,35 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 
 - Native UI configuration flow (no YAML required)
 - Local push architecture (`iot_class: local_push`)
-- Credential validation (`API_ID` / `API_KEY`)
+- Credential validation (`API_ID` / `API_KEY`), compared in constant time
 - Supports both **PWS/WU** and **WSLink** receive modes
 - HTTPS awareness in config flow:
   - If Home Assistant is detected as non-HTTPS, a confirmation warning is shown before continuing
 - Automatic entity discovery:
-  - Sensors are created when first data is received
-  - New sensor detection triggers a translated persistent notification
+  - Sensors are created as soon as the station sends the matching data
+  - New entities appear immediately, without reloading the integration
+  - Newly detected modules trigger a translated persistent notification
+- Device topology:
+  - The base station is exposed as a hub device
+  - Each detected module gets its own device, linked to the hub
+  - Any module device can be removed manually from its device page
 - Rich weather and environmental sensor coverage:
   - Indoor/outdoor temperature & humidity
   - Pressure, wind speed/direction/gust, rain metrics
   - UV, solar radiation, dew point, feels like, heat index, wind chill
   - Lightning sensors (time, distance, strike counters)
-  - Optional air-quality sensors (HCHO, VOC, CO2) when reported
+  - Optional air-quality sensors (PM, HCHO, VOC, CO₂, CO) when reported
 - WSLink battery handling:
-  - Sensor battery values
+  - Percentage battery sensors for modules reporting a level
   - Dedicated battery binary sensors (low/normal semantics)
-- WSLink stale module cleanup:
-  - Handles stale entities/devices when modules remain disconnected
-  - Applies to all WSLink module types except Type1 (base station)
-  - Uses a confirmation window to avoid aggressive deletion on partial payloads
+  - All battery entities are exposed in the diagnostic category
 
 ---
 
 ## Requirements
 
-- Home Assistant with `http` integration enabled (default)
+- Home Assistant **2026.7** or newer
+- The `http` integration enabled (default)
 - A weather station capable of sending data to a custom server
 - Network connectivity from station to Home Assistant
 
@@ -82,35 +85,37 @@ No YAML is needed.
 
 ## Options (UI)
 
-In integration options, you can configure:
+In integration options, you can change:
 
-- Credentials and API mode (same as initial setup)
-- `Inactive samples before cleanup`
-  Number of consecutive WSLink payloads where a module is disconnected/missing before cleanup can occur
-- `Minimum inactivity time (minutes)`
-  Minimum duration a module must remain disconnected/missing before cleanup can occur
+- `API_ID` and `API_KEY`
+- `API mode`
+- `Developer log`
 
-Default cleanup values:
-
-- `Inactive samples before cleanup` = `3`
-- `Minimum inactivity time (minutes)` = `5`
+Credentials and the developer log are applied immediately. Changing the API mode
+reloads the integration, since it selects both the endpoint and the sensor set.
 
 ---
 
-## WSLink Stale Module Cleanup
+## Devices and Modules
 
-In WSLink mode, the integration can automatically clean up stale modules after confirmed inactivity.
+The base station is exposed as a hub device. Every module reported by the
+station becomes its own device attached to that hub: outdoor sensor, extra
+channels, lightning sensor, water leak sensors, air-quality sensors, and so on.
+Channel-based modules also expose a diagnostic sensor holding their channel
+number.
 
-### Behavior
+### Removing a module
 
-Cleanup is triggered only when both conditions are met:
+Open the device page of the module and use **⋮ → Delete**. The device and all its
+entities are removed right away, without reloading the integration.
 
-1. A module is disconnected/missing for enough consecutive payloads (`Inactive samples before cleanup`)
-2. Inactivity lasts long enough (`Minimum inactivity time (minutes)`)
+Removal is not permanent by design: the module is simply forgotten. If the
+station keeps reporting it, the device and its entities are recreated on the next
+payload, along with a detection notification. To make the removal stick, stop the
+module from reporting, or unpair it from the station.
 
-When confirmed inactive, the integration removes module entities (including related `*_binary` entities) and removes the module device if no entities remain attached.
-
-If the module reconnects, inactivity tracking is reset.
+This is the intended way to get rid of a module you no longer own. The
+integration never deletes devices on its own.
 
 ---
 
@@ -146,6 +151,8 @@ Configure your station custom upload target to your Home Assistant host.
 - **WSLink mode**: use endpoint
   `/data/upload.php`
 
+Both endpoints accept `GET` and `POST`.
+
 Use the same `API_ID` / `API_KEY` on both station and integration config.
 
 ---
@@ -154,8 +161,8 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
 
 - Before first payload after startup/reload, entities remain available (bootstrap-safe behavior).
 - After payloads are received, if a sensor is missing in incoming data, it becomes `unavailable`.
+- In WSLink mode, a module reported as disconnected stops publishing values, so its entities become `unavailable` until it comes back.
 - Entities are **not auto-disabled** in registry and are kept manageable by the user.
-- In WSLink mode, confirmed long-term inactivity can trigger stale module cleanup (see above).
 
 ---
 
@@ -175,11 +182,13 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
   - If your station sends HTTPS, verify your HTTPS endpoint/proxy setup
 - Unauthorized errors:
   - Credentials in payload do not match integration options
+  - Repeated failures may get the station IP banned by Home Assistant; check `ip_bans.yaml`
 - Missing sensors:
   - Sensors appear only after station sends corresponding keys at least once
-- Entities/devices not removed immediately in WSLink:
-  - This is expected due to cleanup thresholds
-  - Check cleanup options in integration settings
+- A deleted module came back:
+  - The station is still reporting it; stop or unpair the module at the station
+- Entities stay `unavailable`:
+  - The module is reported as disconnected, or the station stopped sending that data
 
 Enable debug logs:
 
@@ -196,6 +205,9 @@ logger:
 
 - Data flow is local (station → Home Assistant)
 - No cloud account required by this integration
+- Station endpoints are served through Home Assistant's HTTP component, so failed
+  authentication attempts feed the built-in IP ban protection
+- Station credentials are compared in constant time and are never written to logs
 - Keep Home Assistant and station endpoints protected within your LAN
 
 ---
