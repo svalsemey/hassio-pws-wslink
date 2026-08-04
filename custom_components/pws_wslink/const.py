@@ -5,37 +5,54 @@ from typing import Final
 
 DOMAIN = "pws_wslink"
 MANUFACTURER = "PWS / WSLink"
-ROUTES_KEY: Final = "routes"
+ROUTER_KEY: Final = "router"
 URI_API_PWS = "/weatherstation/updateweatherstation.php"
 URI_API_WSLINK = "/data/upload.php"
 URL_WSLINK_ADDON: Final = "https://github.com/schizza/wslink-addon"
+STATION_ID: Final = "station_id"
+STATION_PASSWORD: Final = "station_password"
 
-API_ID = "API_ID"
-API_KEY = "API_KEY"
+API_MODE: Final = "api_mode"
+API_MODE_PWS: Final = "pws"
+API_MODE_WSLINK: Final = "wslink"
 # Payload fields carrying the station credentials, per protocol.
 CREDENTIAL_FIELDS_PWS: Final = ("ID", "PASSWORD")
 CREDENTIAL_FIELDS_WSLINK: Final = ("wsid", "wspw")
 CREDENTIAL_FIELDS: Final = frozenset(CREDENTIAL_FIELDS_PWS + CREDENTIAL_FIELDS_WSLINK)
 
-SENSORS_TO_LOAD: Final = "sensors_to_load"
+# Station endpoint path -> API mode served by that path.
+API_MODE_BY_URI: Final[dict[str, str]] = {
+    URI_API_PWS: API_MODE_PWS,
+    URI_API_WSLINK: API_MODE_WSLINK,
+}
 
-API_MODE: Final = "api_mode"
-API_MODE_PWS: Final = "pws"
-API_MODE_WSLINK: Final = "wslink"
+# API mode -> payload fields carrying the station id and password.
+CREDENTIAL_FIELDS_BY_MODE: Final[dict[str, tuple[str, str]]] = {
+    API_MODE_PWS: CREDENTIAL_FIELDS_PWS,
+    API_MODE_WSLINK: CREDENTIAL_FIELDS_WSLINK,
+}
+
+SENSORS_TO_LOAD: Final = "sensors_to_load"
 
 DEV_DBG: Final = "dev_debug_checkbox"
 
-INVALID_CREDENTIALS: Final = [
-    "API",
-    "API_ID",
-    "API ID",
-    "_ID",
-    "ID",
-    "API KEY",
-    "API_KEY",
-    "KEY",
-    "_KEY",
-]
+# Placeholder labels a user may leave in the form instead of real credentials,
+# normalized as uppercase words joined by single underscores.
+INVALID_CREDENTIALS: Final = frozenset(
+    {
+        "API",
+        "API_ID",
+        "API_KEY",
+        "API_PASSWORD",
+        "ID",
+        "KEY",
+        "PASSWORD",
+        "STATION",
+        "STATION_ID",
+        "STATION_KEY",
+        "STATION_PASSWORD",
+    }
+)
 
 # Options only read while setting up the entry; changing one requires a reload.
 # Every other option is read live from the entry on each payload.

@@ -70,7 +70,7 @@ class ChannelDiagnosticSensor(SensorEntity):
         """Initialize the channel number sensor of one module."""
         self._config_entry = config_entry
         self._module = module
-        self._attr_unique_id = f"{module}_channel_number"
+        self._attr_unique_id = f"{config_entry.entry_id}_{module}_channel_number"
         self._attr_native_value = channel
 
     @property
@@ -172,7 +172,7 @@ class WeatherSensor(
         """Initialize sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = description.key
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
 
         # Seed from the current payload so entities created after a discovery
         # expose their value without waiting for the next one.

@@ -14,8 +14,9 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 ## Features
 
 - Native UI configuration flow (no YAML required)
+- Multiple stations supported: add the integration once per station
 - Local push architecture (`iot_class: local_push`)
-- Credential validation (`API_ID` / `API_KEY`), compared in constant time
+- Credential validation (station ID / password), compared in constant time
 - Supports both **PWS/WU** and **WSLink** receive modes
 - HTTPS awareness in config flow:
   - If Home Assistant is detected as non-HTTPS, a confirmation warning is shown before continuing
@@ -72,8 +73,8 @@ It is designed for stations such as **Sencor**, **Bresser**, **Garni**, and comp
 
 When adding the integration:
 
-- `API_ID`: station ID/identifier configured on the station
-- `API_KEY`: password/key configured on the station
+- `Station ID`: the station ID configured on the station
+- `Station password`: the password configured on the station
 - `API mode`:
   - `pws` = PWS/WU endpoint mode
   - `wslink` = WSLink endpoint mode
@@ -87,12 +88,26 @@ No YAML is needed.
 
 In integration options, you can change:
 
-- `API_ID` and `API_KEY`
+- `Station ID` and `Station password`
 - `API mode`
 - `Developer log`
 
 Credentials and the developer log are applied immediately. Changing the API mode
 reloads the integration, since it selects both the endpoint and the sensor set.
+
+---
+
+## Multiple Stations
+
+Several weather stations can be configured side by side. Add the integration
+once per station, each with its own station ID and password.
+
+All stations share the same two endpoints. Incoming payloads are routed to the
+right station by the credentials they carry, so both stations can use the same
+API mode, or a different one each.
+
+ID is shown as the serial number of the hub. Two stations cannot share the same
+station ID; the configuration flow rejects a duplicate.
 
 ---
 
@@ -153,7 +168,7 @@ Configure your station custom upload target to your Home Assistant host.
 
 Both endpoints accept `GET` and `POST`.
 
-Use the same `API_ID` / `API_KEY` on both station and integration config.
+Use the same station ID and password on both the station and the integration.
 
 ---
 
@@ -178,10 +193,11 @@ Use the same `API_ID` / `API_KEY` on both station and integration config.
 - No data arriving:
   - Verify station target URL, host/IP, and port
   - Confirm protocol mode (PWS/WU vs WSLink) matches integration option
-  - Check credentials (`API_ID` / `API_KEY`)
+  - Check credentials (station ID / password)
   - If your station sends HTTPS, verify your HTTPS endpoint/proxy setup
 - Unauthorized errors:
-  - Credentials in payload do not match integration options
+  - No configured station matches the credentials sent in the payload
+  - Check that the API mode of the target station matches the endpoint used
   - Repeated failures may get the station IP banned by Home Assistant; check `ip_bans.yaml`
 - Missing sensors:
   - Sensors appear only after station sends corresponding keys at least once

@@ -122,6 +122,7 @@ def device_info_for_module(config_entry: ConfigEntry, module: str) -> DeviceInfo
             identifiers={hub_identifier},
             manufacturer=MANUFACTURER,
             model=model,
+            serial_number=config_entry.unique_id,
             entry_type=DeviceEntryType.SERVICE,
             translation_key=translation_key,
             translation_placeholders=placeholders,

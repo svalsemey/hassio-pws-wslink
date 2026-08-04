@@ -1,31 +1,30 @@
 {
     "config": {
         "error": {
-            "valid_credentials_api": "Provide valid API ID.",
-            "valid_credentials_key": "Provide valid API KEY.",
-            "valid_credentials_match": "API ID and API KEY should not be the same.",
+            "valid_station_id": "Provide a valid station ID.",
+            "valid_station_password": "Provide a valid station password.",
+            "valid_credentials_match": "The station ID and password must be different.",
             "confirm_https": "Please confirm before continuing."
         },
         "abort": {
-            "already_configured": "The Weather Station is already configured.",
+            "already_configured": "A weather station is already configured with this station ID.",
             "unknown": "Unexpected error, please restart the configuration."
         },
         "step": {
             "user": {
-                "description": "Provide API ID and API KEY so the Weather Station can access HomeAssistant",
+                "description": "Provide the station ID and password of one weather station. Add the integration again to configure another station.",
                 "title": "Configure access for Weather Station",
                 "data": {
-                    "API_ID": "API ID / Station ID",
-                    "API_KEY": "API KEY / Password",
+                    "station_id": "Station ID",
+                    "station_password": "Station password",
                     "api_mode": "API mode",
                     "dev_debug_checkbox": "Developer log"
                 },
                 "data_description": {
-                    "API_ID": "API ID is the Station ID you set in the Weather Station.",
-                    "API_KEY": "API KEY is the password you set in the Weather Station.",
+                    "station_id": "The station ID you set in your weather station.",
+                    "station_password": "The password you set in your weather station.",
                     "api_mode": "Select which protocol your station uses to send data.",
-                    "dev_debug_checkbox": "Enable only if you want to send debuging data to the developer."
-
+                    "dev_debug_checkbox": "Enable only if you want to send debugging data to the developer."
                 }
             },
             "https_warning": {
@@ -39,28 +38,28 @@
     },
     "options": {
         "error": {
-            "valid_credentials_api": "Provide valid API ID.",
-            "valid_credentials_key": "Provide valid API KEY.",
-            "valid_credentials_match": "API ID and API KEY should not be the same.",
+            "valid_station_id": "Provide a valid station ID.",
+            "valid_station_password": "Provide a valid station password.",
+            "valid_credentials_match": "The station ID and password must be different.",
+            "duplicate_station": "Another weather station is already configured with this station ID.",
             "confirm_https": "Please confirm before continuing."
         },
         "abort": {
-            "already_configured": "The Weather Station is already configured.",
             "unknown": "Unexpected error, please restart the configuration."
         },
         "step": {
             "basic": {
-                "description": "Provide API ID and API KEY so the Weather Station can access Home Assistant",
+                "description": "Provide the station ID and password so the weather station can send data to Home Assistant",
                 "title": "Configure credentials",
                 "data": {
-                    "API_ID": "API ID / Station ID",
-                    "API_KEY": "API KEY / Password",
+                    "station_id": "Station ID",
+                    "station_password": "Station password",
                     "api_mode": "API mode",
                     "dev_debug_checkbox": "Developer log"
                 },
                 "data_description": {
-                    "API_ID": "API ID is the Station ID you set in the Weather Station.",
-                    "API_KEY": "API KEY is the password you set in the Weather Station.",
+                    "station_id": "The station ID you set in your weather station.",
+                    "station_password": "The password you set in your weather station.",
                     "api_mode": "Select which protocol your station uses to send data.",
                     "dev_debug_checkbox": "Enable only if you want to send debugging data to the developer."
                 }

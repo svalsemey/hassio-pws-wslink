@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 import logging
 import math
+import re
 from typing import Any
 
 from homeassistant.components import persistent_notification
@@ -19,6 +20,7 @@ from .const import (
     CREDENTIAL_FIELDS,
     DEV_DBG,
     DOMAIN,
+    INVALID_CREDENTIALS,
     OUTSIDE_HUMIDITY,
     OUTSIDE_TEMP,
     REMAP_ITEMS_PWS,
@@ -31,6 +33,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_CREDENTIAL_SEPARATORS = re.compile(r"[\s_-]+")
 
 
 async def translations(
@@ -110,6 +113,16 @@ async def translated_notification(
 def anonymize(data: Mapping[str, Any]) -> dict[str, Any]:
     """Return the received payload without the station credentials."""
     return {key: value for key, value in data.items() if key not in CREDENTIAL_FIELDS}
+
+
+def is_placeholder_credential(value: str) -> bool:
+    """Return True when a credential is blank or a well-known placeholder label.
+
+    Matching ignores case, surrounding blanks and the separator used between
+    words, so "Station ID", "station-id" and " _STATION_ID_ " are all rejected.
+    """
+    normalized = _CREDENTIAL_SEPARATORS.sub("_", value.strip().upper()).strip("_")
+    return not normalized or normalized in INVALID_CREDENTIALS
 
 
 def signal_keys_changed(config_entry: ConfigEntry) -> str:

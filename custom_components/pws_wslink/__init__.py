@@ -1,34 +1,29 @@
 """Weather Station integration."""
 
+from collections.abc import Mapping
 from hmac import compare_digest
 import logging
-from typing import Any
-
-import aiohttp.web
-from aiohttp.web_exceptions import HTTPUnauthorized
+from typing import Any, Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    API_ID,
-    API_KEY,
     API_MODE,
+    API_MODE_PWS,
     API_MODE_WSLINK,
-    CREDENTIAL_FIELDS_PWS,
-    CREDENTIAL_FIELDS_WSLINK,
     DEV_DBG,
     DOMAIN,
     RELOAD_OPTIONS,
-    ROUTES_KEY,
+    ROUTER_KEY,
     SENSORS_TO_LOAD,
-    URI_API_PWS,
-    URI_API_WSLINK,
+    STATION_ID,
+    STATION_PASSWORD,
 )
 from .device_map import module_for_key, module_metadata
 from .helpers import (
@@ -41,10 +36,15 @@ from .helpers import (
     translated_notification,
     translations,
 )
-from .routes import Routes
+from .routes import StationRouter
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+# Credential option keys used before they were renamed after the station wording.
+_RENAMED_OPTIONS: Final[dict[str, str]] = {
+    "API_ID": STATION_ID,
+    "API_KEY": STATION_PASSWORD,
+}
 
 
 class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -66,7 +66,12 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for key, value in self._setup_options.items()
         )
 
-    def _credentials_match(self, station_id: str, station_key: str) -> bool:
+    @property
+    def api_mode(self) -> str:
+        """Return the protocol this station is configured to use."""
+        return self.config_entry.options.get(API_MODE, API_MODE_PWS)
+
+    def credentials_match(self, station_id: str, station_password: str) -> bool:
         """Compare station credentials using constant-time comparison.
 
         Both comparisons are always evaluated (bitwise `&` instead of `and`)
@@ -75,10 +80,11 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         options = self.config_entry.options
         return bool(
             compare_digest(
-                str(station_id).encode(), str(options.get(API_ID) or "").encode()
+                str(station_id).encode(), str(options.get(STATION_ID) or "").encode()
             )
             & compare_digest(
-                str(station_key).encode(), str(options.get(API_KEY) or "").encode()
+                str(station_password).encode(),
+                str(options.get(STATION_PASSWORD) or "").encode(),
             )
         )
 
@@ -114,23 +120,13 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"{DOMAIN}_new_modules_{self.config_entry.entry_id}",
         )
 
-    async def received_data(self, webdata: aiohttp.web.Request) -> aiohttp.web.Response:
-        """Handle incoming data query."""
-        is_wslink = self.config_entry.options.get(API_MODE) == API_MODE_WSLINK
-        data = dict(webdata.query) | dict(await webdata.post())
-        id_field, key_field = (
-            CREDENTIAL_FIELDS_WSLINK if is_wslink else CREDENTIAL_FIELDS_PWS
+    async def async_handle_payload(self, data: Mapping[str, Any]) -> None:
+        """Process one authenticated payload coming from this station."""
+        remaped_items = (
+            remap_items_wslink(data)
+            if self.api_mode == API_MODE_WSLINK
+            else remap_items_pws(data)
         )
-
-        if id_field not in data or key_field not in data:
-            _LOGGER.error("Invalid request. No security data provided!")
-            raise HTTPUnauthorized
-
-        if not self._credentials_match(data[id_field], data[key_field]):
-            _LOGGER.error("Unauthorised access on %s", webdata.path)
-            raise HTTPUnauthorized
-
-        remaped_items = remap_items_wslink(data) if is_wslink else remap_items_pws(data)
 
         loaded = loaded_sensors(self.config_entry)
         merged = list(
@@ -154,26 +150,24 @@ class WeatherDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._async_notify_new_modules(new_keys, loaded)
 
         if self.config_entry.options.get(DEV_DBG):
-            _LOGGER.info("Dev log: %s", anonymize(data))
-
-        return aiohttp.web.Response(body="OK", status=200)
+            _LOGGER.info("Dev log for %s: %s", self.config_entry.title, anonymize(data))
 
 
-def _async_routes(hass: HomeAssistant) -> Routes:
-    """Return the shared route registry, registering the HTTP views once."""
+def _async_router(hass: HomeAssistant) -> StationRouter:
+    """Return the shared router, registering the HTTP views once."""
     hass_data = hass.data.setdefault(DOMAIN, {})
 
-    if (routes := hass_data.get(ROUTES_KEY)) is None:
-        routes = Routes()
+    if (router := hass_data.get(ROUTER_KEY)) is None:
+        router = StationRouter()
         try:
-            routes.async_register_views(hass)
+            router.async_register_views(hass)
         except RuntimeError as err:
             raise PlatformNotReady(
                 f"Unable to register the Weather Station HTTP views: {err}"
             ) from err
-        hass_data[ROUTES_KEY] = routes
+        hass_data[ROUTER_KEY] = router
 
-    return routes
+    return router
 
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -181,7 +175,7 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     Sensor discovery rewrites the options from inside the HTTP handler, so
     reloading unconditionally would tear down the coordinator while it is still
-    serving the request and reset the module inactivity counters.
+    serving the request.
     """
     coordinator: WeatherDataUpdateCoordinator | None = hass.data[DOMAIN].get(
         entry.entry_id
@@ -190,17 +184,45 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
         await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate an entry created before multi-station support.
+
+    Entity unique ids used to be bare sensor keys, which would collide as soon
+    as a second station is configured, the entry unique id was the domain itself
+    instead of the station id, and credentials were stored under API oriented
+    keys.
+    """
+    if entry.version > 2:
+        return False
+
+    ent_reg = er.async_get(hass)
+    prefix = f"{entry.entry_id}_"
+    for reg_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        if not reg_entry.unique_id.startswith(prefix):
+            ent_reg.async_update_entity(
+                reg_entry.entity_id, new_unique_id=f"{prefix}{reg_entry.unique_id}"
+            )
+
+    data = {_RENAMED_OPTIONS.get(key, key): value for key, value in entry.data.items()}
+    options = {
+        _RENAMED_OPTIONS.get(key, key): value for key, value in entry.options.items()
+    }
+
+    hass.config_entries.async_update_entry(
+        entry,
+        version=2,
+        unique_id=options.get(STATION_ID) or data.get(STATION_ID),
+        data=data,
+        options=options,
+    )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up the config entry for the weather station."""
+    """Set up the config entry of one weather station."""
     coordinator = WeatherDataUpdateCoordinator(hass, entry)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-
-    _async_routes(hass).switch_route(
-        coordinator.received_data,
-        URI_API_WSLINK
-        if entry.options.get(API_MODE) == API_MODE_WSLINK
-        else URI_API_PWS,
-    )
+    _async_router(hass).register(entry.entry_id, coordinator)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(update_listener))
@@ -238,12 +260,12 @@ async def async_remove_config_entry_device(
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry, leaving the other stations untouched."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 
     hass.data[DOMAIN].pop(entry.entry_id, None)
-    if (routes := hass.data[DOMAIN].get(ROUTES_KEY)) is not None:
-        routes.release()
+    if (router := hass.data[DOMAIN].get(ROUTER_KEY)) is not None:
+        router.unregister(entry.entry_id)
 
     return True

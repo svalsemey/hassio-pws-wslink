@@ -1,28 +1,28 @@
 {
     "config": {
         "error": {
-            "valid_credentials_api": "Veuillez saisir un identifiant API valide.",
-            "valid_credentials_key": "Veuillez saisir une clé API valide.",
-            "valid_credentials_match": "L’identifiant API et la clé API ne doivent pas être identiques.",
+            "valid_station_id": "Veuillez fournir un identifiant de station valide.",
+            "valid_station_password": "Veuillez fournir un mot de passe de station valide.",
+            "valid_credentials_match": "L’identifiant de station et le mot de passe doivent être différents.",
             "confirm_https": "Veuillez confirmer pour continuer."
         },
         "abort": {
-            "already_configured": "La station météo est déjà configurée.",
+            "already_configured": "Une station météo est déjà configurée avec cet identifiant de station.",
             "unknown": "Erreur inattendue, veuillez redémarrer la configuration."
         },
         "step": {
             "user": {
-                "description": "Saisissez l’identifiant API et la clé API afin que la station météo puisse accéder à Home Assistant.",
-                "title": "Configurer l’accès de la station météo",
+                "description": "Fournissez l’identifiant de station et le mot de passe d’une station météo. Ajoutez à nouveau l’intégration pour configurer une autre station.",
+                "title": "Configurer l’accès à la station météo",
                 "data": {
-                    "API_ID": "Identifiant API / Identifiant de station",
-                    "API_KEY": "Clé API / Mot de passe",
+                    "station_id": "Identifiant de station",
+                    "station_password": "Mot de passe de station",
                     "api_mode": "Mode API",
                     "dev_debug_checkbox": "Journal de débogage"
                 },
                 "data_description": {
-                    "API_ID": "L’identifiant API correspond à l’identifiant de station défini dans la station météo.",
-                    "API_KEY": "La clé API correspond au mot de passe défini dans la station météo.",
+                    "station_id": "L’identifiant de station que vous avez défini dans votre station météo.",
+                    "station_password": "Le mot de passe que vous avez défini dans votre station météo.",
                     "api_mode": "Sélectionnez le protocole utilisé par votre station pour envoyer les données.",
                     "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur."
                 }
@@ -38,28 +38,28 @@
     },
     "options": {
         "error": {
-            "valid_credentials_api": "Veuillez saisir un identifiant API valide.",
-            "valid_credentials_key": "Veuillez saisir une clé API valide.",
-            "valid_credentials_match": "L’identifiant API et la clé API ne doivent pas être identiques.",
+            "valid_station_id": "Veuillez fournir un identifiant de station valide.",
+            "valid_station_password": "Veuillez fournir un mot de passe de station valide.",
+            "valid_credentials_match": "L’identifiant de station et le mot de passe doivent être différents.",
+            "duplicate_station": "Une autre station météo est déjà configurée avec cet identifiant de station.",
             "confirm_https": "Veuillez confirmer pour continuer."
         },
         "abort": {
-            "already_configured": "La station météo est déjà configurée.",
             "unknown": "Erreur inattendue, veuillez redémarrer la configuration."
         },
         "step": {
             "basic": {
-                "description": "Saisissez l’identifiant API et la clé API afin que la station météo puisse accéder à Home Assistant.",
-                "title": "Configurer les identifiants",
+                "description": "Saisissez l’identifiant de station et le mot de passe afin que la station météo puisse envoyer des données à Home Assistant",
+                "title": "Configurer l’accès à la station météo",
                 "data": {
-                    "API_ID": "Identifiant API / Identifiant de station",
-                    "API_KEY": "Clé API / Mot de passe",
+                    "station_id": "Identifiant de station",
+                    "station_password": "Mot de passe de station",
                     "api_mode": "Mode API",
                     "dev_debug_checkbox": "Journal de débogage"
                 },
                 "data_description": {
-                    "API_ID": "L’identifiant API correspond à l’identifiant de station défini dans la station météo.",
-                    "API_KEY": "La clé API correspond au mot de passe défini dans la station météo.",
+                    "station_id": "L’identifiant de station que vous avez défini dans votre station météo.",
+                    "station_password": "Le mot de passe que vous avez défini dans votre station météo.",
                     "api_mode": "Sélectionnez le protocole utilisé par votre station pour envoyer les données.",
                     "dev_debug_checkbox": "Activez uniquement si vous souhaitez envoyer des données de débogage au développeur."
                 }

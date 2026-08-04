@@ -127,7 +127,9 @@ class WeatherBinarySensor(
         """Initialize binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{description.key}_binary"
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.entry_id}_{description.key}_binary"
+        )
 
         # Bootstrap guard:
         # Keep entities available until at least one payload has been received
