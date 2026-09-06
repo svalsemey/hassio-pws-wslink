@@ -1,3 +1,8 @@
+[![HACS Default](https://img.shields.io/badge/HACS-Default-blue?style=flat&logo=homeassistantcommunitystore&logoSize=auto)](https://my.home-assistant.io/redirect/hacs_repository/?owner=svalsemey&repository=hassio-pws-wslink&category=plugin)
+[![HACS Passing](https://github.com/svalsemey/hassio-pws-wslink/actions/workflows/validate.yml/badge.svg)](https://github.com/svalsemey/hassio-pws-wslink/actions/workflows/validate.yml)
+[![Total Downloads](https://img.shields.io/github/downloads/svalsemey/hassio-pws-wslink/total.svg)](https://github.com/svalsemey/hassio-pws-wslink/releases)
+[![Latest Release Downloads](https://img.shields.io/github/downloads/svalsemey/hassio-pws-wslink/latest/total.svg)](https://github.com/svalsemey/hassio-pws-wslink/releases/latest)
+
 # Weather Station for Home Assistant
 
 Custom integration for local weather stations.
