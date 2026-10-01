@@ -2,6 +2,7 @@
 [![HACS Passing](https://github.com/svalsemey/hassio-pws-wslink/actions/workflows/validate.yml/badge.svg)](https://github.com/svalsemey/hassio-pws-wslink/actions/workflows/validate.yml)
 [![Total Downloads](https://img.shields.io/github/downloads/svalsemey/hassio-pws-wslink/total.svg)](https://github.com/svalsemey/hassio-pws-wslink/releases)
 [![Latest Release Downloads](https://img.shields.io/github/downloads/svalsemey/hassio-pws-wslink/latest/total.svg)](https://github.com/svalsemey/hassio-pws-wslink/releases/latest)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sebastien_valsemey)
 
 # Weather Station for Home Assistant
 
